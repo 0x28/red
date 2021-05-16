@@ -1,5 +1,4 @@
 use std::io::{self, Read};
-use std::os::unix::io::RawFd;
 
 use termios::{self, ECHO, ICANON, ICRNL, IEXTEN, ISIG, IXON};
 use termios::{Termios, TCSAFLUSH};
@@ -22,9 +21,9 @@ impl Drop for TerminalReset {
     }
 }
 
-const STDIN_FILENO: RawFd = 0;
-// const STDOUT_FILENO: RawFd = 1;
-// const STDERR_FILENO: RawFd = 2;
+const STDIN_FILENO: i32 = 0;
+// const STDOUT_FILENO: i32 = 1;
+// const STDERR_FILENO: i32 = 2;
 
 fn enable_raw_mode() {
     let mut attr = Termios::from_fd(STDIN_FILENO).unwrap();
