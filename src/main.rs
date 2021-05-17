@@ -2,7 +2,7 @@ use std::io::{self, Read};
 
 use termios::{
     self, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG, ISTRIP, IXON,
-    OPOST,
+    OPOST, VMIN, VTIME,
 };
 use termios::{Termios, TCSAFLUSH};
 
@@ -34,16 +34,19 @@ fn enable_raw_mode() {
     attr.c_oflag &= !(OPOST);
     attr.c_cflag |= CS8;
     attr.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
+    attr.c_cc[VMIN] = 0;
+    attr.c_cc[VTIME] = 1;
     termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, &attr).unwrap();
 }
 
 fn main() {
-    let mut c = [0; 1];
     let _term_reset =
         TerminalReset::new(Termios::from_fd(STDIN_FILENO).unwrap());
     enable_raw_mode();
 
-    while io::stdin().read_exact(&mut c).is_ok() {
+    loop {
+        let mut c = [0; 1];
+        let _ = io::stdin().read(&mut c).expect("read failed!");
         match c[0] as char {
             'q' => break,
             ch if ch.is_control() => println!("{}\r", c[0]),
