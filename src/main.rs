@@ -1,6 +1,9 @@
 use std::io::{self, Read};
 
-use termios::{self, ECHO, ICANON, ICRNL, IEXTEN, ISIG, IXON, OPOST};
+use termios::{
+    self, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG, ISTRIP, IXON,
+    OPOST,
+};
 use termios::{Termios, TCSAFLUSH};
 
 struct TerminalReset {
@@ -27,8 +30,9 @@ const STDIN_FILENO: i32 = 0;
 
 fn enable_raw_mode() {
     let mut attr = Termios::from_fd(STDIN_FILENO).unwrap();
-    attr.c_iflag &= !(ICRNL | IXON);
+    attr.c_iflag &= !(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
     attr.c_oflag &= !(OPOST);
+    attr.c_cflag |= CS8;
     attr.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
     termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, &attr).unwrap();
 }
