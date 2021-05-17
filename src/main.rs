@@ -1,10 +1,9 @@
 use std::io::{self, Read};
 
 use termios::{
-    self, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG, ISTRIP, IXON,
-    OPOST, VMIN, VTIME,
+    self, Termios, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG,
+    ISTRIP, IXON, OPOST, TCSAFLUSH, VMIN, VTIME,
 };
-use termios::{Termios, TCSAFLUSH};
 
 struct TerminalReset {
     original: Termios,
