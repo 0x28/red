@@ -26,6 +26,12 @@ impl Drop for TerminalReset {
     }
 }
 
+const fn ctrl(c: char) -> u8 {
+    c as u8 & 0x1f
+}
+
+const CTRL_Q: u8 = ctrl('q');
+
 const STDIN_FILENO: i32 = 0;
 // const STDOUT_FILENO: i32 = 1;
 // const STDERR_FILENO: i32 = 2;
@@ -49,10 +55,10 @@ fn main() {
     loop {
         let mut c = [0; 1];
         let _ = io::stdin().read(&mut c).expect("read failed!");
-        match c[0] as char {
-            'q' => break,
-            ch if ch.is_control() => println!("{}\r", c[0]),
-            ch => println!("{} ('{}')\r", c[0], ch),
+        match c[0] {
+            CTRL_Q => break,
+            ch if ch.is_ascii_control() => println!("{}\r", c[0]),
+            ch => println!("{} ('{}')\r", ch, ch as char),
         }
     }
 }
