@@ -12,6 +12,9 @@ const fn ctrl(c: char) -> u8 {
 
 const CTRL_Q: u8 = ctrl('q');
 
+const ESC_SEQ_RESET_CURSOR: &[u8] = b"\x1b[H";
+const ESC_SEQ_CLEAR_SCREEN: &[u8] = b"\x1b[2J";
+
 const STDIN_FILENO: i32 = 0;
 // const STDOUT_FILENO: i32 = 1;
 // const STDERR_FILENO: i32 = 2;
@@ -47,18 +50,39 @@ fn editor_read_key() -> Result<u8, Box<dyn Error>> {
 fn editor_process_keypress() -> Result<bool, Box<dyn Error>> {
     match editor_read_key()? {
         CTRL_Q => {
-            editor_refresh_screen()?;
+            clear_screen()?;
             Ok(false)
         }
         _ => Ok(true),
     }
 }
 
+fn clear_screen() -> Result<(), Box<dyn Error>> {
+    let mut stdout = io::stdout();
+
+    stdout.write_all(ESC_SEQ_CLEAR_SCREEN)?;
+    stdout.write_all(ESC_SEQ_RESET_CURSOR)?;
+    stdout.flush()?;
+
+    Ok(())
+}
+
+fn editor_draw_rows() -> Result<(), Box<dyn Error>> {
+    let mut stdout = io::stdout();
+
+    for _y in 0..24 { // TODO: get terminal height
+        stdout.write_all(b"~\r\n")?;
+    }
+
+    Ok(())
+}
+
 fn editor_refresh_screen() -> Result<(), Box<dyn Error>> {
     let mut stdout = io::stdout();
 
-    stdout.write_all(b"\x1b[2J")?;
-    stdout.write_all(b"\x1b[H")?;
+    clear_screen()?;
+    editor_draw_rows()?;
+    stdout.write_all(ESC_SEQ_RESET_CURSOR)?;
     stdout.flush()?;
 
     Ok(())
@@ -95,7 +119,7 @@ fn main() {
         TerminalReset::new(Termios::from_fd(STDIN_FILENO).expect("tcgetattr"));
 
     if let Err(e) = editor() {
-        editor_refresh_screen().unwrap();
+        clear_screen().unwrap();
         eprintln!("error: {}", e)
     }
 }
