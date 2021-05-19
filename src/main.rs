@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 
 use termios::{
     self, Termios, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG,
@@ -50,6 +50,14 @@ fn editor_process_keypress() -> bool {
     }
 }
 
+fn editor_refresh_screen() {
+    let mut stdout = io::stdout();
+
+    stdout.write(b"\x1b[2J").expect("write failed");
+    stdout.write(b"\x1b[H").expect("write failed");
+    stdout.flush().expect("flush failed");
+}
+
 fn enable_raw_mode() {
     let mut attr = Termios::from_fd(STDIN_FILENO).expect("tcgetattr");
     attr.c_iflag &= !(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
@@ -66,5 +74,10 @@ fn main() {
         TerminalReset::new(Termios::from_fd(STDIN_FILENO).expect("tcgetattr"));
     enable_raw_mode();
 
-    while editor_process_keypress() {}
+    loop {
+        editor_refresh_screen();
+        if !editor_process_keypress() {
+            break;
+        }
+    }
 }
