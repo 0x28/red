@@ -1,8 +1,9 @@
+use std::error::Error;
 use std::io::{self, Read, Write};
 
 use termios::{
-    self, Termios, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG,
-    ISTRIP, IXON, OPOST, TCSAFLUSH, VMIN, VTIME,
+    Termios, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG, ISTRIP,
+    IXON, OPOST, TCSAFLUSH, VMIN, VTIME,
 };
 
 const fn ctrl(c: char) -> u8 {
@@ -36,48 +37,65 @@ impl Drop for TerminalReset {
     }
 }
 
-fn editor_read_key() -> u8 {
+fn editor_read_key() -> Result<u8, Box<dyn Error>> {
     let mut c = [0; 1];
-    while io::stdin().read(&mut c).expect("read failed") != 1 {}
+    while io::stdin().read(&mut c)? != 1 {}
 
-    c[0]
+    Ok(c[0])
 }
 
-fn editor_process_keypress() -> bool {
-    match editor_read_key() {
-        CTRL_Q => false,
-        _ => true,
+fn editor_process_keypress() -> Result<bool, Box<dyn Error>> {
+    match editor_read_key()? {
+        CTRL_Q => {
+            editor_refresh_screen()?;
+            Ok(false)
+        }
+        _ => Ok(true),
     }
 }
 
-fn editor_refresh_screen() {
+fn editor_refresh_screen() -> Result<(), Box<dyn Error>> {
     let mut stdout = io::stdout();
 
-    stdout.write(b"\x1b[2J").expect("write failed");
-    stdout.write(b"\x1b[H").expect("write failed");
-    stdout.flush().expect("flush failed");
+    stdout.write_all(b"\x1b[2J")?;
+    stdout.write_all(b"\x1b[H")?;
+    stdout.flush()?;
+
+    Ok(())
 }
 
-fn enable_raw_mode() {
-    let mut attr = Termios::from_fd(STDIN_FILENO).expect("tcgetattr");
+fn enable_raw_mode() -> Result<(), Box<dyn Error>> {
+    let mut attr = Termios::from_fd(STDIN_FILENO)?;
     attr.c_iflag &= !(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
     attr.c_oflag &= !(OPOST);
     attr.c_cflag |= CS8;
     attr.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
     attr.c_cc[VMIN] = 0;
     attr.c_cc[VTIME] = 1;
-    termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, &attr).expect("tcsetattr");
+    termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, &attr)?;
+
+    Ok(())
+}
+
+fn editor() -> Result<(), Box<dyn Error>> {
+    enable_raw_mode()?;
+
+    loop {
+        editor_refresh_screen()?;
+        if !editor_process_keypress()? {
+            break;
+        }
+    }
+
+    Ok(())
 }
 
 fn main() {
     let _term_reset =
         TerminalReset::new(Termios::from_fd(STDIN_FILENO).expect("tcgetattr"));
-    enable_raw_mode();
 
-    loop {
-        editor_refresh_screen();
-        if !editor_process_keypress() {
-            break;
-        }
+    if let Err(e) = editor() {
+        editor_refresh_screen().unwrap();
+        eprintln!("error: {}", e)
     }
 }
