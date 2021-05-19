@@ -5,6 +5,16 @@ use termios::{
     ISTRIP, IXON, OPOST, TCSAFLUSH, VMIN, VTIME,
 };
 
+const fn ctrl(c: char) -> u8 {
+    c as u8 & 0x1f
+}
+
+const CTRL_Q: u8 = ctrl('q');
+
+const STDIN_FILENO: i32 = 0;
+// const STDOUT_FILENO: i32 = 1;
+// const STDERR_FILENO: i32 = 2;
+
 struct TerminalReset {
     original: Termios,
 }
@@ -26,15 +36,19 @@ impl Drop for TerminalReset {
     }
 }
 
-const fn ctrl(c: char) -> u8 {
-    c as u8 & 0x1f
+fn editor_read_key() -> u8 {
+    let mut c = [0; 1];
+    while io::stdin().read(&mut c).expect("read failed") != 1 {}
+
+    c[0]
 }
 
-const CTRL_Q: u8 = ctrl('q');
-
-const STDIN_FILENO: i32 = 0;
-// const STDOUT_FILENO: i32 = 1;
-// const STDERR_FILENO: i32 = 2;
+fn editor_process_keypress() -> bool {
+    match editor_read_key() {
+        CTRL_Q => false,
+        _ => true,
+    }
+}
 
 fn enable_raw_mode() {
     let mut attr = Termios::from_fd(STDIN_FILENO).expect("tcgetattr");
@@ -52,13 +66,5 @@ fn main() {
         TerminalReset::new(Termios::from_fd(STDIN_FILENO).expect("tcgetattr"));
     enable_raw_mode();
 
-    loop {
-        let mut c = [0; 1];
-        let _ = io::stdin().read(&mut c).expect("read failed!");
-        match c[0] {
-            CTRL_Q => break,
-            ch if ch.is_ascii_control() => println!("{}\r", c[0]),
-            ch => println!("{} ('{}')\r", ch, ch as char),
-        }
-    }
+    while editor_process_keypress() {}
 }
