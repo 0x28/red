@@ -1,10 +1,13 @@
+use libc::STDIN_FILENO;
+use red_ioctl::get_terminal_win_size;
 use std::error::Error;
 use std::io::{self, Read, Write};
-
 use termios::{
     Termios, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG, ISTRIP,
     IXON, OPOST, TCSAFLUSH, VMIN, VTIME,
 };
+
+mod red_ioctl;
 
 const fn ctrl(c: char) -> u8 {
     c as u8 & 0x1f
@@ -15,21 +18,24 @@ const CTRL_Q: u8 = ctrl('q');
 const ESC_SEQ_RESET_CURSOR: &[u8] = b"\x1b[H";
 const ESC_SEQ_CLEAR_SCREEN: &[u8] = b"\x1b[2J";
 
-const STDIN_FILENO: i32 = 0;
-// const STDOUT_FILENO: i32 = 1;
-// const STDERR_FILENO: i32 = 2;
-
-struct TerminalReset {
+struct EditorConfig {
     original: Termios,
+    screen_rows: usize,
+    screen_cols: usize,
 }
 
-impl TerminalReset {
-    fn new(original: Termios) -> TerminalReset {
-        TerminalReset { original }
+impl EditorConfig {
+    fn new(original: Termios) -> Result<EditorConfig, Box<dyn Error>> {
+        let (rows, cols) = get_terminal_win_size()?;
+        Ok(EditorConfig {
+            original,
+            screen_rows: rows,
+            screen_cols: cols,
+        })
     }
 }
 
-impl Drop for TerminalReset {
+impl Drop for EditorConfig {
     fn drop(&mut self) {
         // NOTE: Don't panic while dropping!
         if let Err(e) =
@@ -67,21 +73,23 @@ fn clear_screen() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn editor_draw_rows() -> Result<(), Box<dyn Error>> {
+fn editor_draw_rows(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
     let mut stdout = io::stdout();
-
-    for _y in 0..24 { // TODO: get terminal height
-        stdout.write_all(b"~\r\n")?;
+    for y in 0..config.screen_rows {
+        stdout.write_all(b"~")?;
+        if y < config.screen_rows - 1 {
+            stdout.write_all(b"\r\n")?;
+        }
     }
 
     Ok(())
 }
 
-fn editor_refresh_screen() -> Result<(), Box<dyn Error>> {
+fn editor_refresh_screen(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
     let mut stdout = io::stdout();
 
     clear_screen()?;
-    editor_draw_rows()?;
+    editor_draw_rows(&config)?;
     stdout.write_all(ESC_SEQ_RESET_CURSOR)?;
     stdout.flush()?;
 
@@ -101,11 +109,11 @@ fn enable_raw_mode() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn editor() -> Result<(), Box<dyn Error>> {
+fn editor(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
 
     loop {
-        editor_refresh_screen()?;
+        editor_refresh_screen(&config)?;
         if !editor_process_keypress()? {
             break;
         }
@@ -115,10 +123,11 @@ fn editor() -> Result<(), Box<dyn Error>> {
 }
 
 fn main() {
-    let _term_reset =
-        TerminalReset::new(Termios::from_fd(STDIN_FILENO).expect("tcgetattr"));
+    let conf =
+        EditorConfig::new(Termios::from_fd(STDIN_FILENO).expect("tcgetattr"))
+            .unwrap();
 
-    if let Err(e) = editor() {
+    if let Err(e) = editor(&conf) {
         clear_screen().unwrap();
         eprintln!("error: {}", e)
     }
