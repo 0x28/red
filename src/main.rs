@@ -25,10 +25,16 @@ const ESC_SEQ_HIDE_CURSOR: &[u8] = b"\x1b[?25l";
 const ESC_SEQ_SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 const ESC_SEQ_CLEAR_LINE: &[u8] = b"\x1b[K";
 
+fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
+    format!("\x1b[{};{}H", pos_y, pos_x).into_bytes()
+}
+
 const RED_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 struct EditorConfig {
     original: Termios,
+    cursor_x: usize,
+    cursor_y: usize,
     screen_rows: usize,
     screen_cols: usize,
 }
@@ -41,6 +47,8 @@ impl EditorConfig {
 
         Ok(EditorConfig {
             original,
+            cursor_x: 0,
+            cursor_y: 0,
             screen_rows: rows,
             screen_cols: cols,
         })
@@ -109,11 +117,27 @@ fn editor_read_key() -> Result<u8, Box<dyn Error>> {
     Ok(c[0])
 }
 
-fn editor_process_keypress() -> Result<bool, Box<dyn Error>> {
+fn editor_move_cursor(config: &mut EditorConfig, key: u8) {
+    match key {
+        b'a' if config.cursor_x > 0 => config.cursor_x -= 1,
+        b'd' => config.cursor_x += 1,
+        b'w' if config.cursor_y > 0 => config.cursor_y -= 1,
+        b's' => config.cursor_y += 1,
+        _ => (),
+    }
+}
+
+fn editor_process_keypress(
+    config: &mut EditorConfig,
+) -> Result<bool, Box<dyn Error>> {
     match editor_read_key()? {
         CTRL_Q => {
             clear_screen(&mut io::stdout())?;
             Ok(false)
+        }
+        key if matches!(key, b'w' | b'a' | b's' | b'd') => {
+            editor_move_cursor(config, key);
+            Ok(true)
         }
         _ => Ok(true),
     }
@@ -168,8 +192,13 @@ fn editor_refresh_screen(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
 
     buffer.write_all(ESC_SEQ_HIDE_CURSOR)?;
     buffer.write_all(ESC_SEQ_RESET_CURSOR)?;
+
     editor_draw_rows(&config, &mut buffer)?;
-    buffer.write_all(ESC_SEQ_RESET_CURSOR)?;
+    buffer.write_all(&esc_seq_move_cursor(
+        config.cursor_y + 1,
+        config.cursor_x + 1,
+    ))?;
+
     buffer.write_all(ESC_SEQ_SHOW_CURSOR)?;
 
     stdout.write_all(&buffer)?;
@@ -191,10 +220,10 @@ fn enable_raw_mode() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn editor(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
+fn editor(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
     loop {
         editor_refresh_screen(&config)?;
-        if !editor_process_keypress()? {
+        if !editor_process_keypress(config)? {
             break;
         }
     }
@@ -203,9 +232,9 @@ fn editor(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
 }
 
 fn main() {
-    let conf = EditorConfig::new().unwrap();
+    let mut conf = EditorConfig::new().unwrap();
 
-    if let Err(e) = editor(&conf) {
+    if let Err(e) = editor(&mut conf) {
         clear_screen(&mut io::stdout()).unwrap();
         eprintln!("error: {}", e)
     }
