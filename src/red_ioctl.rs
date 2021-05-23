@@ -5,7 +5,7 @@ use libc::winsize;
 use libc::STDIN_FILENO;
 use libc::TIOCGWINSZ;
 
-pub fn get_terminal_win_size() -> Result<(usize, usize), Box<dyn Error>> {
+pub fn get_window_size_ioctl() -> Result<(usize, usize), Box<dyn Error>> {
     let mut ws = winsize {
         ws_row: 0,
         ws_col: 0,
