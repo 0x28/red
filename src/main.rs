@@ -75,10 +75,8 @@ fn get_cursor_position() -> Result<(usize, usize), Box<dyn Error>> {
         return Err(Box::new(EditorError::ParseGetCursorResponse));
     }
 
-    let pos: Result<Vec<usize>, _> = response[2..]
-        .split(';')
-        .map(str::parse::<usize>)
-        .collect();
+    let pos: Result<Vec<usize>, _> =
+        response[2..].split(';').map(str::parse::<usize>).collect();
 
     match pos?.as_slice() {
         [row, col] => Ok((*row, *col)),
@@ -109,29 +107,29 @@ fn editor_read_key() -> Result<u8, Box<dyn Error>> {
 fn editor_process_keypress() -> Result<bool, Box<dyn Error>> {
     match editor_read_key()? {
         CTRL_Q => {
-            clear_screen()?;
+            clear_screen(&mut io::stdout())?;
             Ok(false)
         }
         _ => Ok(true),
     }
 }
 
-fn clear_screen() -> Result<(), Box<dyn Error>> {
-    let mut stdout = io::stdout();
-
-    stdout.write_all(ESC_SEQ_CLEAR_SCREEN)?;
-    stdout.write_all(ESC_SEQ_RESET_CURSOR)?;
-    stdout.flush()?;
+fn clear_screen(dest: &mut impl Write) -> Result<(), Box<dyn Error>> {
+    dest.write_all(ESC_SEQ_CLEAR_SCREEN)?;
+    dest.write_all(ESC_SEQ_RESET_CURSOR)?;
+    dest.flush()?;
 
     Ok(())
 }
 
-fn editor_draw_rows(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
-    let mut stdout = io::stdout();
+fn editor_draw_rows(
+    config: &EditorConfig,
+    dest: &mut impl Write,
+) -> Result<(), Box<dyn Error>> {
     for y in 0..config.screen_rows {
-        stdout.write_all(b"~")?;
+        dest.write_all(b"~")?;
         if y < config.screen_rows - 1 {
-            stdout.write_all(b"\r\n")?;
+            dest.write_all(b"\r\n")?;
         }
     }
 
@@ -139,12 +137,12 @@ fn editor_draw_rows(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
 }
 
 fn editor_refresh_screen(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
-    let mut stdout = io::stdout();
+    let mut buffer = vec![];
 
-    clear_screen()?;
-    editor_draw_rows(&config)?;
-    stdout.write_all(ESC_SEQ_RESET_CURSOR)?;
-    stdout.flush()?;
+    clear_screen(&mut buffer)?;
+    editor_draw_rows(&config, &mut buffer)?;
+    buffer.write_all(ESC_SEQ_RESET_CURSOR)?;
+    io::stdout().write_all(&buffer)?;
 
     Ok(())
 }
@@ -177,7 +175,7 @@ fn main() {
     let conf = EditorConfig::new().unwrap();
 
     if let Err(e) = editor(&conf) {
-        clear_screen().unwrap();
+        clear_screen(&mut io::stdout()).unwrap();
         eprintln!("error: {}", e)
     }
 }
