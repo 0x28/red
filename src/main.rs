@@ -21,6 +21,8 @@ const ESC_SEQ_RESET_CURSOR: &[u8] = b"\x1b[H";
 const ESC_SEQ_CLEAR_SCREEN: &[u8] = b"\x1b[2J";
 const ESC_SEQ_BOTTOM_RIGHT: &[u8] = b"\x1b[999C\x1b[999B";
 const ESC_SEQ_QUERY_CURSOR: &[u8] = b"\x1b[6n";
+const ESC_SEQ_HIDE_CURSOR: &[u8] = b"\x1b[?25l";
+const ESC_SEQ_SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 
 struct EditorConfig {
     original: Termios,
@@ -139,9 +141,12 @@ fn editor_draw_rows(
 fn editor_refresh_screen(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
     let mut buffer = vec![];
 
+    buffer.write_all(ESC_SEQ_HIDE_CURSOR)?;
     clear_screen(&mut buffer)?;
     editor_draw_rows(&config, &mut buffer)?;
     buffer.write_all(ESC_SEQ_RESET_CURSOR)?;
+    buffer.write_all(ESC_SEQ_SHOW_CURSOR)?;
+
     io::stdout().write_all(&buffer)?;
 
     Ok(())
