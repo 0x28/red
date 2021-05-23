@@ -25,6 +25,8 @@ const ESC_SEQ_HIDE_CURSOR: &[u8] = b"\x1b[?25l";
 const ESC_SEQ_SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 const ESC_SEQ_CLEAR_LINE: &[u8] = b"\x1b[K";
 
+const RED_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 struct EditorConfig {
     original: Termios,
     screen_rows: usize,
@@ -130,7 +132,27 @@ fn editor_draw_rows(
     dest: &mut impl Write,
 ) -> Result<(), Box<dyn Error>> {
     for y in 0..config.screen_rows {
-        dest.write_all(b"~")?;
+        if y == config.screen_rows / 3 {
+            let mut welcome_msg =
+                format!("red editor -- version {}", RED_VERSION);
+            welcome_msg.truncate(config.screen_cols);
+
+            let mut padding = (config.screen_cols - welcome_msg.len()) / 2;
+            if padding > 0 {
+                dest.write_all(b"~")?;
+                padding -= 1;
+            }
+
+            while padding > 0 {
+                dest.write_all(b" ")?;
+                padding -= 1;
+            }
+
+            dest.write_all(&welcome_msg.into_bytes())?;
+        } else {
+            dest.write_all(b"~")?;
+        }
+
         dest.write_all(ESC_SEQ_CLEAR_LINE)?;
         if y < config.screen_rows - 1 {
             dest.write_all(b"\r\n")?;
@@ -142,6 +164,7 @@ fn editor_draw_rows(
 
 fn editor_refresh_screen(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
     let mut buffer = vec![];
+    let mut stdout = io::stdout();
 
     buffer.write_all(ESC_SEQ_HIDE_CURSOR)?;
     buffer.write_all(ESC_SEQ_RESET_CURSOR)?;
@@ -149,7 +172,8 @@ fn editor_refresh_screen(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
     buffer.write_all(ESC_SEQ_RESET_CURSOR)?;
     buffer.write_all(ESC_SEQ_SHOW_CURSOR)?;
 
-    io::stdout().write_all(&buffer)?;
+    stdout.write_all(&buffer)?;
+    stdout.flush()?;
 
     Ok(())
 }
