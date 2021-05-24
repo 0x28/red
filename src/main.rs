@@ -143,9 +143,13 @@ fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
 fn editor_move_cursor(config: &mut EditorConfig, key: EditorKey) {
     match key {
         EditorKey::ArrowLeft if config.cursor_x > 0 => config.cursor_x -= 1,
-        EditorKey::ArrowRight => config.cursor_x += 1,
+        EditorKey::ArrowRight if config.cursor_x < config.screen_cols - 1 => {
+            config.cursor_x += 1
+        }
         EditorKey::ArrowUp if config.cursor_y > 0 => config.cursor_y -= 1,
-        EditorKey::ArrowDown => config.cursor_y += 1,
+        EditorKey::ArrowDown if config.cursor_y < config.screen_rows - 1 => {
+            config.cursor_y += 1
+        }
         _ => (),
     }
 }
