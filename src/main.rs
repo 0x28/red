@@ -38,8 +38,11 @@ enum EditorKey {
     ArrowRight,
     ArrowUp,
     ArrowDown,
+    Delete,
     PageUp,
     PageDown,
+    Home,
+    End,
     Other(u8),
 }
 
@@ -137,12 +140,17 @@ fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
             b"[B" => Ok(EditorKey::ArrowDown),
             b"[C" => Ok(EditorKey::ArrowRight),
             b"[D" => Ok(EditorKey::ArrowLeft),
+            b"[H" | b"OH" => Ok(EditorKey::Home),
+            b"[F" | b"OF" => Ok(EditorKey::End),
             esc_seq if esc_seq[0] == b'[' && esc_seq[1].is_ascii_digit() => {
                 if let Err(_) = io::stdin().read_exact(&mut seq[2..]) {
                     return Ok(EditorKey::Other(ESC));
                 }
 
                 match &seq {
+                    b"[1~" | b"[7~" => Ok(EditorKey::Home),
+                    b"[3~" => Ok(EditorKey::Delete),
+                    b"[4~" | b"[8~" => Ok(EditorKey::End),
                     b"[5~" => Ok(EditorKey::PageUp),
                     b"[6~" => Ok(EditorKey::PageDown),
                     _ => Ok(EditorKey::Other(ESC)),
@@ -177,6 +185,14 @@ fn editor_process_keypress(
         EditorKey::Other(CTRL_Q) => {
             clear_screen(&mut io::stdout())?;
             Ok(false)
+        }
+        EditorKey::Home => {
+            config.cursor_x = 0;
+            Ok(true)
+        }
+        EditorKey::End => {
+            config.cursor_x = config.screen_cols - 1;
+            Ok(true)
         }
         EditorKey::PageUp | EditorKey::PageDown => {
             for _ in 0..config.screen_rows {
