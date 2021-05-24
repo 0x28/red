@@ -131,7 +131,7 @@ fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
 
     if c[0] == ESC {
         let mut seq = [0; 3];
-        if let Err(_) = io::stdin().read_exact(&mut seq[..2]) {
+        if io::stdin().read_exact(&mut seq[..2]).is_err() {
             return Ok(EditorKey::Other(ESC));
         }
 
@@ -143,7 +143,7 @@ fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
             b"[H" | b"OH" => Ok(EditorKey::Home),
             b"[F" | b"OF" => Ok(EditorKey::End),
             esc_seq if esc_seq[0] == b'[' && esc_seq[1].is_ascii_digit() => {
-                if let Err(_) = io::stdin().read_exact(&mut seq[2..]) {
+                if io::stdin().read_exact(&mut seq[2..]).is_err() {
                     return Ok(EditorKey::Other(ESC));
                 }
 
