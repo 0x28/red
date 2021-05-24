@@ -31,6 +31,14 @@ fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
 
 const RED_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+enum EditorKey {
+    ArrowLeft,
+    ArrowRight,
+    ArrowUp,
+    ArrowDown,
+    Other(u8),
+}
+
 struct EditorConfig {
     original: Termios,
     cursor_x: usize,
@@ -110,19 +118,34 @@ fn get_window_size() -> Result<(usize, usize), Box<dyn Error>> {
     get_cursor_position()
 }
 
-fn editor_read_key() -> Result<u8, Box<dyn Error>> {
+fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
     let mut c = [0; 1];
     while io::stdin().read(&mut c)? != 1 {}
 
-    Ok(c[0])
+    if c[0] == b'\x1b' {
+        let mut seq = [0; 2];
+        if let Err(_) = io::stdin().read_exact(&mut seq) {
+            return Ok(EditorKey::Other(b'\x1b'));
+        }
+
+        match &seq {
+            b"[A" => Ok(EditorKey::ArrowUp),
+            b"[B" => Ok(EditorKey::ArrowDown),
+            b"[C" => Ok(EditorKey::ArrowRight),
+            b"[D" => Ok(EditorKey::ArrowLeft),
+            _ => Ok(EditorKey::Other(b'\x1b')),
+        }
+    } else {
+        Ok(EditorKey::Other(c[0]))
+    }
 }
 
-fn editor_move_cursor(config: &mut EditorConfig, key: u8) {
+fn editor_move_cursor(config: &mut EditorConfig, key: EditorKey) {
     match key {
-        b'a' if config.cursor_x > 0 => config.cursor_x -= 1,
-        b'd' => config.cursor_x += 1,
-        b'w' if config.cursor_y > 0 => config.cursor_y -= 1,
-        b's' => config.cursor_y += 1,
+        EditorKey::ArrowLeft if config.cursor_x > 0 => config.cursor_x -= 1,
+        EditorKey::ArrowRight => config.cursor_x += 1,
+        EditorKey::ArrowUp if config.cursor_y > 0 => config.cursor_y -= 1,
+        EditorKey::ArrowDown => config.cursor_y += 1,
         _ => (),
     }
 }
@@ -130,12 +153,16 @@ fn editor_move_cursor(config: &mut EditorConfig, key: u8) {
 fn editor_process_keypress(
     config: &mut EditorConfig,
 ) -> Result<bool, Box<dyn Error>> {
-    match editor_read_key()? {
-        CTRL_Q => {
+    let key = editor_read_key()?;
+    match key {
+        EditorKey::Other(CTRL_Q) => {
             clear_screen(&mut io::stdout())?;
             Ok(false)
         }
-        key if matches!(key, b'w' | b'a' | b's' | b'd') => {
+        EditorKey::ArrowLeft
+        | EditorKey::ArrowRight
+        | EditorKey::ArrowUp
+        | EditorKey::ArrowDown => {
             editor_move_cursor(config, key);
             Ok(true)
         }
