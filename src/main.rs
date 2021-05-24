@@ -16,6 +16,7 @@ const fn ctrl(c: char) -> u8 {
 }
 
 const CTRL_Q: u8 = ctrl('q');
+const ESC: u8 = b'\x1b';
 
 const ESC_SEQ_RESET_CURSOR: &[u8] = b"\x1b[H";
 const ESC_SEQ_CLEAR_SCREEN: &[u8] = b"\x1b[2J";
@@ -31,11 +32,14 @@ fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
 
 const RED_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[derive(PartialEq)]
 enum EditorKey {
     ArrowLeft,
     ArrowRight,
     ArrowUp,
     ArrowDown,
+    PageUp,
+    PageDown,
     Other(u8),
 }
 
@@ -122,18 +126,29 @@ fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
     let mut c = [0; 1];
     while io::stdin().read(&mut c)? != 1 {}
 
-    if c[0] == b'\x1b' {
-        let mut seq = [0; 2];
-        if let Err(_) = io::stdin().read_exact(&mut seq) {
-            return Ok(EditorKey::Other(b'\x1b'));
+    if c[0] == ESC {
+        let mut seq = [0; 3];
+        if let Err(_) = io::stdin().read_exact(&mut seq[..2]) {
+            return Ok(EditorKey::Other(ESC));
         }
 
-        match &seq {
+        match &seq[..2] {
             b"[A" => Ok(EditorKey::ArrowUp),
             b"[B" => Ok(EditorKey::ArrowDown),
             b"[C" => Ok(EditorKey::ArrowRight),
             b"[D" => Ok(EditorKey::ArrowLeft),
-            _ => Ok(EditorKey::Other(b'\x1b')),
+            esc_seq if esc_seq[0] == b'[' && esc_seq[1].is_ascii_digit() => {
+                if let Err(_) = io::stdin().read_exact(&mut seq[2..]) {
+                    return Ok(EditorKey::Other(ESC));
+                }
+
+                match &seq {
+                    b"[5~" => Ok(EditorKey::PageUp),
+                    b"[6~" => Ok(EditorKey::PageDown),
+                    _ => Ok(EditorKey::Other(ESC)),
+                }
+            }
+            _ => Ok(EditorKey::Other(ESC)),
         }
     } else {
         Ok(EditorKey::Other(c[0]))
@@ -162,6 +177,20 @@ fn editor_process_keypress(
         EditorKey::Other(CTRL_Q) => {
             clear_screen(&mut io::stdout())?;
             Ok(false)
+        }
+        EditorKey::PageUp | EditorKey::PageDown => {
+            for _ in 0..config.screen_rows {
+                editor_move_cursor(
+                    config,
+                    if key == EditorKey::PageUp {
+                        EditorKey::ArrowUp
+                    } else {
+                        EditorKey::ArrowDown
+                    },
+                )
+            }
+
+            Ok(true)
         }
         EditorKey::ArrowLeft
         | EditorKey::ArrowRight
