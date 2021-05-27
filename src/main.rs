@@ -1,6 +1,7 @@
 use libc::STDIN_FILENO;
-use std::error::Error;
-use std::io::{self, Read, Write};
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::{env, error::Error, path::Path};
 use termios::{
     Termios, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG, ISTRIP,
     IXON, OPOST, TCSAFLUSH, VMIN, VTIME,
@@ -52,6 +53,7 @@ struct EditorConfig {
     cursor_y: usize,
     screen_rows: usize,
     screen_cols: usize,
+    rows: Vec<String>,
 }
 
 impl EditorConfig {
@@ -66,6 +68,7 @@ impl EditorConfig {
             cursor_y: 0,
             screen_rows: rows,
             screen_cols: cols,
+            rows: vec![],
         })
     }
 }
@@ -123,6 +126,22 @@ fn get_window_size() -> Result<(usize, usize), Box<dyn Error>> {
     stdout.flush()?;
 
     get_cursor_position()
+}
+
+fn editor_open(
+    config: &mut EditorConfig,
+    file_path: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let file = File::open(file_path)?;
+    let mut reader = BufReader::new(file);
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    line = line
+        .trim_end_matches(|c| c == '\n' || c == '\r')
+        .to_string();
+    config.rows.push(line);
+
+    Ok(())
 }
 
 fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
@@ -232,27 +251,39 @@ fn editor_draw_rows(
     dest: &mut impl Write,
 ) -> Result<(), Box<dyn Error>> {
     for y in 0..config.screen_rows {
-        if y == config.screen_rows / 3 {
-            let mut welcome_msg =
-                format!("red editor -- version {}", RED_VERSION);
-            welcome_msg.truncate(config.screen_cols);
+        if y >= config.rows.len() {
+            if config.rows.is_empty() && y == config.screen_rows / 3 {
+                let mut welcome_msg =
+                    format!("red editor -- version {}", RED_VERSION);
+                welcome_msg.truncate(config.screen_cols);
 
-            let mut padding = (config.screen_cols - welcome_msg.len()) / 2;
-            if padding > 0 {
+                let mut padding = (config.screen_cols - welcome_msg.len()) / 2;
+                if padding > 0 {
+                    dest.write_all(b"~")?;
+                    padding -= 1;
+                }
+
+                while padding > 0 {
+                    dest.write_all(b" ")?;
+                    padding -= 1;
+                }
+
+                dest.write_all(&welcome_msg.into_bytes())?;
+            } else {
                 dest.write_all(b"~")?;
-                padding -= 1;
             }
-
-            while padding > 0 {
-                dest.write_all(b" ")?;
-                padding -= 1;
-            }
-
-            dest.write_all(&welcome_msg.into_bytes())?;
         } else {
-            dest.write_all(b"~")?;
-        }
+            let first_line = &config.rows[0];
 
+            // NOTE: Ensure that only the first screen_cols glyphs of the
+            // line are printed!
+            let truncated_line = first_line
+                .chars()
+                .take(config.screen_cols)
+                .collect::<String>();
+
+            dest.write_all(&truncated_line.into_bytes())?;
+        }
         dest.write_all(ESC_SEQ_CLEAR_LINE)?;
         if y < config.screen_rows - 1 {
             dest.write_all(b"\r\n")?;
@@ -309,6 +340,11 @@ fn editor(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
 
 fn main() {
     let mut conf = EditorConfig::new().unwrap();
+    let args = env::args().collect::<Vec<_>>();
+
+    if let [_prog, filename] = args.as_slice() {
+        editor_open(&mut conf, Path::new(&filename)).expect("open failed!");
+    }
 
     if let Err(e) = editor(&mut conf) {
         clear_screen(&mut io::stdout()).unwrap();
