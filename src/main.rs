@@ -53,6 +53,7 @@ struct EditorConfig {
     cursor_y: usize,
     screen_rows: usize,
     screen_cols: usize,
+    row_offset: usize,
     rows: Vec<String>,
 }
 
@@ -68,6 +69,7 @@ impl EditorConfig {
             cursor_y: 0,
             screen_rows: rows,
             screen_cols: cols,
+            row_offset: 0,
             rows: vec![],
         })
     }
@@ -133,13 +135,14 @@ fn editor_open(
     file_path: &Path,
 ) -> Result<(), Box<dyn Error>> {
     let file = File::open(file_path)?;
-    let mut reader = BufReader::new(file);
-    let mut line = String::new();
-    reader.read_line(&mut line)?;
-    line = line
-        .trim_end_matches(|c| c == '\n' || c == '\r')
-        .to_string();
-    config.rows.push(line);
+    let reader = BufReader::new(file);
+
+    for line in reader.lines() {
+        let line = line?
+            .trim_end_matches(|c| c == '\n' || c == '\r')
+            .to_string();
+        config.rows.push(line);
+    }
 
     Ok(())
 }
@@ -189,7 +192,7 @@ fn editor_move_cursor(config: &mut EditorConfig, key: EditorKey) {
             config.cursor_x += 1
         }
         EditorKey::ArrowUp if config.cursor_y > 0 => config.cursor_y -= 1,
-        EditorKey::ArrowDown if config.cursor_y < config.screen_rows - 1 => {
+        EditorKey::ArrowDown if config.cursor_y < config.rows.len() => {
             config.cursor_y += 1
         }
         _ => (),
@@ -246,12 +249,22 @@ fn clear_screen(dest: &mut impl Write) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn editor_scroll(config: &mut EditorConfig) {
+    if config.cursor_y < config.row_offset {
+        config.row_offset = config.cursor_y;
+    }
+    if config.cursor_y >= config.row_offset + config.screen_rows {
+        config.row_offset = config.cursor_y - config.screen_rows + 1;
+    }
+}
+
 fn editor_draw_rows(
     config: &EditorConfig,
     dest: &mut impl Write,
 ) -> Result<(), Box<dyn Error>> {
     for y in 0..config.screen_rows {
-        if y >= config.rows.len() {
+        let filerow = y + config.row_offset;
+        if filerow >= config.rows.len() {
             if config.rows.is_empty() && y == config.screen_rows / 3 {
                 let mut welcome_msg =
                     format!("red editor -- version {}", RED_VERSION);
@@ -273,11 +286,9 @@ fn editor_draw_rows(
                 dest.write_all(b"~")?;
             }
         } else {
-            let first_line = &config.rows[0];
-
             // NOTE: Ensure that only the first screen_cols glyphs of the
             // line are printed!
-            let truncated_line = first_line
+            let truncated_line = config.rows[filerow]
                 .chars()
                 .take(config.screen_cols)
                 .collect::<String>();
@@ -293,16 +304,20 @@ fn editor_draw_rows(
     Ok(())
 }
 
-fn editor_refresh_screen(config: &EditorConfig) -> Result<(), Box<dyn Error>> {
+fn editor_refresh_screen(
+    config: &mut EditorConfig,
+) -> Result<(), Box<dyn Error>> {
     let mut buffer = vec![];
     let mut stdout = io::stdout();
+
+    editor_scroll(config);
 
     buffer.write_all(ESC_SEQ_HIDE_CURSOR)?;
     buffer.write_all(ESC_SEQ_RESET_CURSOR)?;
 
     editor_draw_rows(&config, &mut buffer)?;
     buffer.write_all(&esc_seq_move_cursor(
-        config.cursor_y + 1,
+        (config.cursor_y - config.row_offset) + 1,
         config.cursor_x + 1,
     ))?;
 
@@ -329,7 +344,7 @@ fn enable_raw_mode() -> Result<(), Box<dyn Error>> {
 
 fn editor(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
     loop {
-        editor_refresh_screen(&config)?;
+        editor_refresh_screen(config)?;
         if !editor_process_keypress(config)? {
             break;
         }
