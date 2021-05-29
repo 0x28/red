@@ -54,6 +54,7 @@ struct EditorConfig {
     screen_rows: usize,
     screen_cols: usize,
     row_offset: usize,
+    col_offset: usize,
     rows: Vec<String>,
 }
 
@@ -70,6 +71,7 @@ impl EditorConfig {
             screen_rows: rows,
             screen_cols: cols,
             row_offset: 0,
+            col_offset: 0,
             rows: vec![],
         })
     }
@@ -187,15 +189,37 @@ fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
 
 fn editor_move_cursor(config: &mut EditorConfig, key: EditorKey) {
     match key {
-        EditorKey::ArrowLeft if config.cursor_x > 0 => config.cursor_x -= 1,
-        EditorKey::ArrowRight if config.cursor_x < config.screen_cols - 1 => {
-            config.cursor_x += 1
+        EditorKey::ArrowLeft => {
+            if config.cursor_x > 0 {
+                config.cursor_x -= 1;
+            } else if config.cursor_y > 0 {
+                config.cursor_y -= 1;
+                if let Some(row) = config.rows.get(config.cursor_y) {
+                    config.cursor_x = row.len();
+                }
+            }
+        }
+        EditorKey::ArrowRight => {
+            if let Some(row) = config.rows.get(config.cursor_y) {
+                if config.cursor_x < row.len() {
+                    config.cursor_x += 1;
+                } else if config.cursor_x == row.len() {
+                    config.cursor_x = 0;
+                    config.cursor_y += 1;
+                }
+            }
         }
         EditorKey::ArrowUp if config.cursor_y > 0 => config.cursor_y -= 1,
         EditorKey::ArrowDown if config.cursor_y < config.rows.len() => {
             config.cursor_y += 1
         }
         _ => (),
+    }
+
+    if let Some(row) = config.rows.get(config.cursor_y) {
+        config.cursor_x = config.cursor_x.clamp(0, row.len());
+    } else {
+        config.cursor_x = 0;
     }
 }
 
@@ -213,7 +237,10 @@ fn editor_process_keypress(
             Ok(true)
         }
         EditorKey::End => {
-            config.cursor_x = config.screen_cols - 1;
+            if let Some(row) = config.rows.get(config.cursor_y) {
+                config.cursor_x = row.len();
+            }
+
             Ok(true)
         }
         EditorKey::PageUp | EditorKey::PageDown => {
@@ -256,6 +283,12 @@ fn editor_scroll(config: &mut EditorConfig) {
     if config.cursor_y >= config.row_offset + config.screen_rows {
         config.row_offset = config.cursor_y - config.screen_rows + 1;
     }
+    if config.cursor_x < config.col_offset {
+        config.col_offset = config.cursor_x;
+    }
+    if config.cursor_x >= config.col_offset + config.screen_cols {
+        config.col_offset = config.cursor_x - config.screen_cols + 1;
+    }
 }
 
 fn editor_draw_rows(
@@ -290,6 +323,7 @@ fn editor_draw_rows(
             // line are printed!
             let truncated_line = config.rows[filerow]
                 .chars()
+                .skip(config.col_offset)
                 .take(config.screen_cols)
                 .collect::<String>();
 
@@ -318,7 +352,7 @@ fn editor_refresh_screen(
     editor_draw_rows(&config, &mut buffer)?;
     buffer.write_all(&esc_seq_move_cursor(
         (config.cursor_y - config.row_offset) + 1,
-        config.cursor_x + 1,
+        (config.cursor_x - config.col_offset) + 1,
     ))?;
 
     buffer.write_all(ESC_SEQ_SHOW_CURSOR)?;
