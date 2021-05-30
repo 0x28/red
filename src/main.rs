@@ -32,6 +32,7 @@ fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
 }
 
 const RED_VERSION: &str = env!("CARGO_PKG_VERSION");
+const RED_TAB_STOP: usize = 8;
 
 #[derive(PartialEq)]
 enum EditorKey {
@@ -47,15 +48,21 @@ enum EditorKey {
     Other(u8),
 }
 
+struct Row {
+    line: String,
+    render: Vec<char>,
+}
+
 struct EditorConfig {
     original: Termios,
     cursor_x: usize,
     cursor_y: usize,
+    render_x: usize,
     screen_rows: usize,
     screen_cols: usize,
     row_offset: usize,
     col_offset: usize,
-    rows: Vec<String>,
+    rows: Vec<Row>,
 }
 
 impl EditorConfig {
@@ -68,6 +75,7 @@ impl EditorConfig {
             original,
             cursor_x: 0,
             cursor_y: 0,
+            render_x: 0,
             screen_rows: rows,
             screen_cols: cols,
             row_offset: 0,
@@ -132,6 +140,37 @@ fn get_window_size() -> Result<(usize, usize), Box<dyn Error>> {
     get_cursor_position()
 }
 
+fn editor_row_cursor_to_render(row: &Row, cursor_x: usize) -> usize {
+    let mut render_x = 0;
+
+    for c in row.line.chars().take(cursor_x) {
+        if c == '\t' {
+            render_x += (RED_TAB_STOP - 1) - (render_x % RED_TAB_STOP);
+        }
+        render_x += 1;
+    }
+
+    render_x
+}
+
+fn editor_update_row(row: &mut Row) {
+    row.render.clear();
+    let mut idx = 0;
+    for c in row.line.chars() {
+        if c == '\t' {
+            row.render.push(' ');
+            idx += 1;
+            while idx % RED_TAB_STOP != 0 {
+                row.render.push(' ');
+                idx += 1;
+            }
+        } else {
+            row.render.push(c);
+            idx += 1;
+        }
+    }
+}
+
 fn editor_open(
     config: &mut EditorConfig,
     file_path: &Path,
@@ -143,7 +182,12 @@ fn editor_open(
         let line = line?
             .trim_end_matches(|c| c == '\n' || c == '\r')
             .to_string();
-        config.rows.push(line);
+        let mut row = Row {
+            line,
+            render: vec![],
+        };
+        editor_update_row(&mut row);
+        config.rows.push(row);
     }
 
     Ok(())
@@ -195,15 +239,15 @@ fn editor_move_cursor(config: &mut EditorConfig, key: EditorKey) {
             } else if config.cursor_y > 0 {
                 config.cursor_y -= 1;
                 if let Some(row) = config.rows.get(config.cursor_y) {
-                    config.cursor_x = row.len();
+                    config.cursor_x = row.line.len();
                 }
             }
         }
         EditorKey::ArrowRight => {
             if let Some(row) = config.rows.get(config.cursor_y) {
-                if config.cursor_x < row.len() {
+                if config.cursor_x < row.line.len() {
                     config.cursor_x += 1;
-                } else if config.cursor_x == row.len() {
+                } else if config.cursor_x == row.line.len() {
                     config.cursor_x = 0;
                     config.cursor_y += 1;
                 }
@@ -217,7 +261,7 @@ fn editor_move_cursor(config: &mut EditorConfig, key: EditorKey) {
     }
 
     if let Some(row) = config.rows.get(config.cursor_y) {
-        config.cursor_x = config.cursor_x.clamp(0, row.len());
+        config.cursor_x = config.cursor_x.clamp(0, row.line.len());
     } else {
         config.cursor_x = 0;
     }
@@ -238,7 +282,7 @@ fn editor_process_keypress(
         }
         EditorKey::End => {
             if let Some(row) = config.rows.get(config.cursor_y) {
-                config.cursor_x = row.len();
+                config.cursor_x = row.line.len();
             }
 
             Ok(true)
@@ -277,17 +321,21 @@ fn clear_screen(dest: &mut impl Write) -> Result<(), Box<dyn Error>> {
 }
 
 fn editor_scroll(config: &mut EditorConfig) {
+    if let Some(row) = config.rows.get(config.cursor_y) {
+        config.render_x = editor_row_cursor_to_render(row, config.cursor_x);
+    }
+
     if config.cursor_y < config.row_offset {
         config.row_offset = config.cursor_y;
     }
     if config.cursor_y >= config.row_offset + config.screen_rows {
         config.row_offset = config.cursor_y - config.screen_rows + 1;
     }
-    if config.cursor_x < config.col_offset {
-        config.col_offset = config.cursor_x;
+    if config.render_x < config.col_offset {
+        config.col_offset = config.render_x;
     }
-    if config.cursor_x >= config.col_offset + config.screen_cols {
-        config.col_offset = config.cursor_x - config.screen_cols + 1;
+    if config.render_x >= config.col_offset + config.screen_cols {
+        config.col_offset = config.render_x - config.screen_cols + 1;
     }
 }
 
@@ -322,7 +370,8 @@ fn editor_draw_rows(
             // NOTE: Ensure that only the first screen_cols glyphs of the
             // line are printed!
             let truncated_line = config.rows[filerow]
-                .chars()
+                .render
+                .iter()
                 .skip(config.col_offset)
                 .take(config.screen_cols)
                 .collect::<String>();
@@ -352,7 +401,7 @@ fn editor_refresh_screen(
     editor_draw_rows(&config, &mut buffer)?;
     buffer.write_all(&esc_seq_move_cursor(
         (config.cursor_y - config.row_offset) + 1,
-        (config.cursor_x - config.col_offset) + 1,
+        (config.render_x - config.col_offset) + 1,
     ))?;
 
     buffer.write_all(ESC_SEQ_SHOW_CURSOR)?;
