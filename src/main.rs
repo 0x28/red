@@ -288,6 +288,16 @@ fn editor_process_keypress(
             Ok(true)
         }
         EditorKey::PageUp | EditorKey::PageDown => {
+            if key == EditorKey::PageUp {
+                config.cursor_y = config.row_offset;
+            } else if key == EditorKey::PageDown {
+                config.cursor_y = usize::clamp(
+                    config.row_offset + config.screen_rows - 1,
+                    0,
+                    config.rows.len(),
+                );
+            }
+
             for _ in 0..config.screen_rows {
                 editor_move_cursor(
                     config,
