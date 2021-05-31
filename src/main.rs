@@ -1,7 +1,7 @@
 use libc::STDIN_FILENO;
-use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::{env, error::Error, path::Path};
+use std::{fs::File, path::PathBuf};
 use termios::{
     Termios, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG, ISTRIP,
     IXON, OPOST, TCSAFLUSH, VMIN, VTIME,
@@ -26,6 +26,8 @@ const ESC_SEQ_QUERY_CURSOR: &[u8] = b"\x1b[6n";
 const ESC_SEQ_HIDE_CURSOR: &[u8] = b"\x1b[?25l";
 const ESC_SEQ_SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 const ESC_SEQ_CLEAR_LINE: &[u8] = b"\x1b[K";
+const ESC_SEQ_INVERT_COLORS: &[u8] = b"\x1b[7m";
+const ESC_SEQ_RESET_COLORS: &[u8] = b"\x1b[m";
 
 fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
     format!("\x1b[{};{}H", pos_y, pos_x).into_bytes()
@@ -63,6 +65,7 @@ struct EditorConfig {
     row_offset: usize,
     col_offset: usize,
     rows: Vec<Row>,
+    file: Option<PathBuf>,
 }
 
 impl EditorConfig {
@@ -76,11 +79,12 @@ impl EditorConfig {
             cursor_x: 0,
             cursor_y: 0,
             render_x: 0,
-            screen_rows: rows,
+            screen_rows: rows - 1,
             screen_cols: cols,
             row_offset: 0,
             col_offset: 0,
             rows: vec![],
+            file: None,
         })
     }
 }
@@ -189,6 +193,8 @@ fn editor_open(
         editor_update_row(&mut row);
         config.rows.push(row);
     }
+
+    config.file = Some(file_path.to_owned());
 
     Ok(())
 }
@@ -389,10 +395,39 @@ fn editor_draw_rows(
             dest.write_all(&truncated_line.into_bytes())?;
         }
         dest.write_all(ESC_SEQ_CLEAR_LINE)?;
-        if y < config.screen_rows - 1 {
-            dest.write_all(b"\r\n")?;
+        dest.write_all(b"\r\n")?;
+    }
+
+    Ok(())
+}
+
+fn editor_draw_status_bar(
+    config: &EditorConfig,
+    dest: &mut impl Write,
+) -> Result<(), Box<dyn Error>> {
+    dest.write_all(ESC_SEQ_INVERT_COLORS)?;
+
+    let file_name = match &config.file {
+        Some(path) => path.to_string_lossy().to_string(),
+        None => "[No Name]".to_string(),
+    };
+
+    let status_left =
+        format!("{:.20} - {} lines", file_name, config.rows.len());
+    dest.write_all(status_left.as_bytes())?;
+
+    let status_right = format!("{}/{}", config.cursor_y + 1, config.rows.len());
+
+    for len in status_left.len()..config.screen_cols {
+        if config.screen_cols - len == status_right.len() {
+            dest.write_all(status_right.as_bytes())?;
+            break;
+        } else {
+            dest.write_all(b" ")?;
         }
     }
+
+    dest.write_all(ESC_SEQ_RESET_COLORS)?;
 
     Ok(())
 }
@@ -409,6 +444,7 @@ fn editor_refresh_screen(
     buffer.write_all(ESC_SEQ_RESET_CURSOR)?;
 
     editor_draw_rows(&config, &mut buffer)?;
+    editor_draw_status_bar(&config, &mut buffer)?;
     buffer.write_all(&esc_seq_move_cursor(
         (config.cursor_y - config.row_offset) + 1,
         (config.render_x - config.col_offset) + 1,
