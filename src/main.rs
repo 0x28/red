@@ -1,5 +1,6 @@
 use libc::STDIN_FILENO;
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::time::SystemTime;
 use std::{env, error::Error, path::Path};
 use std::{fs::File, path::PathBuf};
 use termios::{
@@ -66,6 +67,8 @@ struct EditorConfig {
     col_offset: usize,
     rows: Vec<Row>,
     file: Option<PathBuf>,
+    status_msg: String,
+    status_time: SystemTime,
 }
 
 impl EditorConfig {
@@ -79,12 +82,14 @@ impl EditorConfig {
             cursor_x: 0,
             cursor_y: 0,
             render_x: 0,
-            screen_rows: rows - 1,
+            screen_rows: rows - 2,
             screen_cols: cols,
             row_offset: 0,
             col_offset: 0,
             rows: vec![],
             file: None,
+            status_msg: String::new(),
+            status_time: SystemTime::UNIX_EPOCH,
         })
     }
 }
@@ -428,6 +433,24 @@ fn editor_draw_status_bar(
     }
 
     dest.write_all(ESC_SEQ_RESET_COLORS)?;
+    dest.write_all(b"\r\n")?;
+
+    Ok(())
+}
+
+fn editor_draw_message_bar(
+    config: &EditorConfig,
+    dest: &mut impl Write,
+) -> Result<(), Box<dyn Error>> {
+    dest.write_all(ESC_SEQ_CLEAR_LINE)?;
+    let mut msg = config.status_msg.clone();
+    msg.truncate(config.screen_cols);
+    let now = SystemTime::now();
+
+    if !msg.is_empty() && now.duration_since(config.status_time)?.as_secs() < 5
+    {
+        dest.write_all(msg.as_bytes())?;
+    }
 
     Ok(())
 }
@@ -445,6 +468,8 @@ fn editor_refresh_screen(
 
     editor_draw_rows(&config, &mut buffer)?;
     editor_draw_status_bar(&config, &mut buffer)?;
+    editor_draw_message_bar(&config, &mut buffer)?;
+
     buffer.write_all(&esc_seq_move_cursor(
         (config.cursor_y - config.row_offset) + 1,
         (config.render_x - config.col_offset) + 1,
@@ -456,6 +481,17 @@ fn editor_refresh_screen(
     stdout.flush()?;
 
     Ok(())
+}
+
+macro_rules! editor_set_status_message {
+    ($config: expr, $($arg:tt)*) => {
+	editor_set_status_message($config, format!($($arg)*));
+    };
+}
+
+fn editor_set_status_message(config: &mut EditorConfig, msg: String) {
+    config.status_msg = msg;
+    config.status_time = SystemTime::now();
 }
 
 fn enable_raw_mode() -> Result<(), Box<dyn Error>> {
@@ -489,6 +525,8 @@ fn main() {
     if let [_prog, filename] = args.as_slice() {
         editor_open(&mut conf, Path::new(&filename)).expect("open failed!");
     }
+
+    editor_set_status_message!(&mut conf, "HELP: Ctrl-Q = quit");
 
     if let Err(e) = editor(&mut conf) {
         clear_screen(&mut io::stdout()).unwrap();
