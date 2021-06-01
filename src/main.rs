@@ -1,4 +1,5 @@
 use libc::STDIN_FILENO;
+use std::cmp::Ordering;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::time::SystemTime;
 use std::{env, error::Error, path::Path};
@@ -256,11 +257,13 @@ fn editor_move_cursor(config: &mut EditorConfig, key: EditorKey) {
         }
         EditorKey::ArrowRight => {
             if let Some(row) = config.rows.get(config.cursor_y) {
-                if config.cursor_x < row.line.len() {
-                    config.cursor_x += 1;
-                } else if config.cursor_x == row.line.len() {
-                    config.cursor_x = 0;
-                    config.cursor_y += 1;
+                match config.cursor_x.cmp(&row.line.len()) {
+                    Ordering::Less => config.cursor_x += 1,
+                    Ordering::Equal => {
+                        config.cursor_x = 0;
+                        config.cursor_y += 1;
+                    }
+                    Ordering::Greater => {}
                 }
             }
         }
