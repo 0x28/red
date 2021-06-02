@@ -53,7 +53,7 @@ enum EditorKey {
 }
 
 struct Row {
-    line: String,
+    line: Vec<char>,
     render: Vec<char>,
 }
 
@@ -153,7 +153,7 @@ fn get_window_size() -> Result<(usize, usize), Box<dyn Error>> {
 fn editor_row_cursor_to_render(row: &Row, cursor_x: usize) -> usize {
     let mut render_x = 0;
 
-    for c in row.line.chars().take(cursor_x) {
+    for &c in row.line.iter().take(cursor_x) {
         if c == '\t' {
             render_x += (RED_TAB_STOP - 1) - (render_x % RED_TAB_STOP);
         }
@@ -166,7 +166,7 @@ fn editor_row_cursor_to_render(row: &Row, cursor_x: usize) -> usize {
 fn editor_update_row(row: &mut Row) {
     row.render.clear();
     let mut idx = 0;
-    for c in row.line.chars() {
+    for &c in row.line.iter() {
         if c == '\t' {
             row.render.push(' ');
             idx += 1;
@@ -191,7 +191,8 @@ fn editor_open(
     for line in reader.lines() {
         let line = line?
             .trim_end_matches(|c| c == '\n' || c == '\r')
-            .to_string();
+            .chars()
+            .collect();
         let mut row = Row {
             line,
             render: vec![],
