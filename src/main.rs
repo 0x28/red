@@ -57,6 +57,15 @@ struct Row {
     render: Vec<char>,
 }
 
+impl Row {
+    fn empty() -> Row {
+        Row {
+            line: vec![],
+            render: vec![],
+        }
+    }
+}
+
 struct EditorConfig {
     original: Termios,
     cursor_x: usize,
@@ -179,6 +188,29 @@ fn editor_update_row(row: &mut Row) {
             idx += 1;
         }
     }
+}
+
+fn editor_row_insert_char(row: &mut Row, mut at: usize, c: char) {
+    if at > row.line.len() {
+        at = row.line.len();
+    }
+
+    row.line.insert(at, c);
+    editor_update_row(row);
+}
+
+fn editor_insert_char(config: &mut EditorConfig, c: char) {
+    if config.cursor_y == config.rows.len() {
+        config.rows.push(Row::empty())
+    }
+
+    editor_row_insert_char(
+        &mut config.rows[config.cursor_y],
+        config.cursor_x,
+        c,
+    );
+
+    config.cursor_x += 1;
 }
 
 fn editor_open(
@@ -333,7 +365,11 @@ fn editor_process_keypress(
             editor_move_cursor(config, key);
             Ok(true)
         }
-        _ => Ok(true),
+        EditorKey::Delete => Ok(true),
+        EditorKey::Other(byte) => {
+            editor_insert_char(config, byte as char);
+            Ok(true)
+        }
     }
 }
 
