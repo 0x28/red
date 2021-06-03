@@ -18,8 +18,11 @@ const fn ctrl(c: char) -> u8 {
     c as u8 & 0x1f
 }
 
+const CTRL_L: u8 = ctrl('l');
+const CTRL_H: u8 = ctrl('h');
 const CTRL_Q: u8 = ctrl('q');
 const ESC: u8 = b'\x1b';
+const BACKSPACE: u8 = b'\x7f';
 
 const ESC_SEQ_RESET_CURSOR: &[u8] = b"\x1b[H";
 const ESC_SEQ_CLEAR_SCREEN: &[u8] = b"\x1b[2J";
@@ -319,6 +322,9 @@ fn editor_process_keypress(
 ) -> Result<bool, Box<dyn Error>> {
     let key = editor_read_key()?;
     match key {
+        EditorKey::Other(b'\r') => {
+            todo!()
+        }
         EditorKey::Other(CTRL_Q) => {
             clear_screen(&mut io::stdout())?;
             Ok(false)
@@ -333,6 +339,11 @@ fn editor_process_keypress(
             }
 
             Ok(true)
+        }
+        EditorKey::Delete
+        | EditorKey::Other(BACKSPACE)
+        | EditorKey::Other(CTRL_H) => {
+            todo!()
         }
         EditorKey::PageUp | EditorKey::PageDown => {
             if key == EditorKey::PageUp {
@@ -365,7 +376,7 @@ fn editor_process_keypress(
             editor_move_cursor(config, key);
             Ok(true)
         }
-        EditorKey::Delete => Ok(true),
+        EditorKey::Other(ESC) | EditorKey::Other(CTRL_L) => Ok(true),
         EditorKey::Other(byte) => {
             editor_insert_char(config, byte as char);
             Ok(true)
