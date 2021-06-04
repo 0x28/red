@@ -1,6 +1,6 @@
 use libc::STDIN_FILENO;
 use std::cmp::Ordering;
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::time::SystemTime;
 use std::{env, error::Error, path::Path};
 use std::{fs::File, path::PathBuf};
@@ -18,9 +18,10 @@ const fn ctrl(c: char) -> u8 {
     c as u8 & 0x1f
 }
 
-const CTRL_L: u8 = ctrl('l');
 const CTRL_H: u8 = ctrl('h');
+const CTRL_L: u8 = ctrl('l');
 const CTRL_Q: u8 = ctrl('q');
+const CTRL_S: u8 = ctrl('s');
 const ESC: u8 = b'\x1b';
 const BACKSPACE: u8 = b'\x7f';
 
@@ -40,6 +41,12 @@ fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
 
 const RED_VERSION: &str = env!("CARGO_PKG_VERSION");
 const RED_TAB_STOP: usize = 8;
+
+macro_rules! editor_set_status_message {
+    ($config: expr, $($arg:tt)*) => {
+	editor_set_status_message($config, format!($($arg)*));
+    };
+}
 
 #[derive(PartialEq)]
 enum EditorKey {
@@ -216,6 +223,56 @@ fn editor_insert_char(config: &mut EditorConfig, c: char) {
     config.cursor_x += 1;
 }
 
+fn editor_write_rows(
+    config: &EditorConfig,
+    output: &mut impl Write,
+) -> Result<usize, Box<dyn Error>> {
+    let mut bytes = 0;
+    for row in &config.rows {
+        for c in &row.line {
+            bytes += output.write(format!("{}", c).as_bytes())?;
+        }
+        bytes += output.write(b"\n")?;
+    }
+
+    Ok(bytes)
+}
+
+fn editor_save(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
+    if config.file.is_none() {
+        return Ok(());
+    }
+
+    let mut write_to_file = || -> Result<(), Box<dyn Error>> {
+        match &config.file {
+            Some(path) => {
+                let mut file = BufWriter::new(File::create(path)?);
+                let bytes_written = editor_write_rows(config, &mut file)?;
+                editor_set_status_message!(
+                    config,
+                    "{} bytes written to disk",
+                    bytes_written
+                );
+
+                Ok(())
+            }
+            None => Ok(()),
+        }
+    };
+
+    match write_to_file() {
+        Ok(()) => Ok(()),
+        Err(msg) => {
+            editor_set_status_message!(
+                config,
+                "Can't save! I/O error: {}",
+                msg
+            );
+            Ok(())
+        }
+    }
+}
+
 fn editor_open(
     config: &mut EditorConfig,
     file_path: &Path,
@@ -328,6 +385,10 @@ fn editor_process_keypress(
         EditorKey::Other(CTRL_Q) => {
             clear_screen(&mut io::stdout())?;
             Ok(false)
+        }
+        EditorKey::Other(CTRL_S) => {
+            editor_save(config)?;
+            Ok(true)
         }
         EditorKey::Home => {
             config.cursor_x = 0;
@@ -534,12 +595,6 @@ fn editor_refresh_screen(
     Ok(())
 }
 
-macro_rules! editor_set_status_message {
-    ($config: expr, $($arg:tt)*) => {
-	editor_set_status_message($config, format!($($arg)*));
-    };
-}
-
 fn editor_set_status_message(config: &mut EditorConfig, msg: String) {
     config.status_msg = msg;
     config.status_time = SystemTime::now();
@@ -577,7 +632,10 @@ fn main() {
         editor_open(&mut conf, Path::new(&filename)).expect("open failed!");
     }
 
-    editor_set_status_message!(&mut conf, "HELP: Ctrl-Q = quit");
+    editor_set_status_message!(
+        &mut conf,
+        "HELP: Ctrl-S = save | Ctrl-Q = quit"
+    );
 
     if let Err(e) = editor(&mut conf) {
         clear_screen(&mut io::stdout()).unwrap();
