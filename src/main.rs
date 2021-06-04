@@ -89,6 +89,7 @@ struct EditorConfig {
     file: Option<PathBuf>,
     status_msg: String,
     status_time: SystemTime,
+    dirty: bool,
 }
 
 impl EditorConfig {
@@ -110,6 +111,7 @@ impl EditorConfig {
             file: None,
             status_msg: String::new(),
             status_time: SystemTime::UNIX_EPOCH,
+            dirty: false,
         })
     }
 }
@@ -221,6 +223,7 @@ fn editor_insert_char(config: &mut EditorConfig, c: char) {
     );
 
     config.cursor_x += 1;
+    config.dirty = true;
 }
 
 fn editor_write_rows(
@@ -243,6 +246,7 @@ fn editor_save(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
+    config.dirty = false;
     let mut write_to_file = || -> Result<(), Box<dyn Error>> {
         match &config.file {
             Some(path) => {
@@ -529,8 +533,12 @@ fn editor_draw_status_bar(
         None => "[No Name]".to_string(),
     };
 
-    let status_left =
-        format!("{:.20} - {} lines", file_name, config.rows.len());
+    let status_left = format!(
+        "{:.20} - {} lines {}",
+        file_name,
+        config.rows.len(),
+        if config.dirty { "(modified)" } else { "" }
+    );
     dest.write_all(status_left.as_bytes())?;
 
     let status_right = format!("{}/{}", config.cursor_y + 1, config.rows.len());
