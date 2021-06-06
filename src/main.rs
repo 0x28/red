@@ -214,6 +214,13 @@ fn editor_row_insert_char(row: &mut Row, mut at: usize, c: char) {
     editor_update_row(row);
 }
 
+fn editor_row_delete_char(row: &mut Row, at: usize) {
+    if at < row.line.len() {
+        row.line.remove(at);
+        editor_update_row(row);
+    }
+}
+
 fn editor_insert_char(config: &mut EditorConfig, c: char) {
     if config.cursor_y == config.rows.len() {
         config.rows.push(Row::empty())
@@ -227,6 +234,16 @@ fn editor_insert_char(config: &mut EditorConfig, c: char) {
 
     config.cursor_x += 1;
     config.dirty = true;
+}
+
+fn editor_delete_char(config: &mut EditorConfig) {
+    if let Some(row) = config.rows.get_mut(config.cursor_y) {
+        if config.cursor_x > 0 {
+            editor_row_delete_char(row, config.cursor_x - 1);
+            config.cursor_x -= 1;
+            config.dirty = true;
+        }
+    }
 }
 
 fn editor_write_rows(
@@ -418,7 +435,10 @@ fn editor_process_keypress(
         EditorKey::Delete
         | EditorKey::Other(BACKSPACE)
         | EditorKey::Other(CTRL_H) => {
-            todo!()
+            if key == EditorKey::Delete {
+                editor_move_cursor(config, EditorKey::ArrowRight);
+            }
+            editor_delete_char(config);
         }
         EditorKey::PageUp | EditorKey::PageDown => {
             if key == EditorKey::PageUp {
