@@ -467,6 +467,7 @@ fn clear_screen(dest: &mut impl Write) -> Result<(), Box<dyn Error>> {
 }
 
 fn editor_scroll(config: &mut EditorConfig) {
+    config.render_x = 0;
     if let Some(row) = config.rows.get(config.cursor_y) {
         config.render_x = editor_row_cursor_to_render(row, config.cursor_x);
     }
