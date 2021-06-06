@@ -41,6 +41,7 @@ fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
 
 const RED_VERSION: &str = env!("CARGO_PKG_VERSION");
 const RED_TAB_STOP: usize = 8;
+const RED_QUIT_TIMES: u8 = 3;
 
 macro_rules! editor_set_status_message {
     ($config: expr, $($arg:tt)*) => {
@@ -90,6 +91,7 @@ struct EditorConfig {
     status_msg: String,
     status_time: SystemTime,
     dirty: bool,
+    quit_times: u8,
 }
 
 impl EditorConfig {
@@ -112,6 +114,7 @@ impl EditorConfig {
             status_msg: String::new(),
             status_time: SystemTime::UNIX_EPOCH,
             dirty: false,
+            quit_times: RED_QUIT_TIMES,
         })
     }
 }
@@ -387,23 +390,30 @@ fn editor_process_keypress(
             todo!()
         }
         EditorKey::Other(CTRL_Q) => {
-            clear_screen(&mut io::stdout())?;
-            Ok(false)
+            if config.dirty && config.quit_times > 0 {
+                editor_set_status_message!(
+                    config,
+                    "WARNING!!! File has unsaved changes. \
+                     Press Ctrl-Q {} more times to quit.",
+                    config.quit_times
+                );
+                config.quit_times -= 1;
+                return Ok(true);
+            } else {
+                clear_screen(&mut io::stdout())?;
+                return Ok(false);
+            }
         }
         EditorKey::Other(CTRL_S) => {
             editor_save(config)?;
-            Ok(true)
         }
         EditorKey::Home => {
             config.cursor_x = 0;
-            Ok(true)
         }
         EditorKey::End => {
             if let Some(row) = config.rows.get(config.cursor_y) {
                 config.cursor_x = row.line.len();
             }
-
-            Ok(true)
         }
         EditorKey::Delete
         | EditorKey::Other(BACKSPACE)
@@ -431,22 +441,21 @@ fn editor_process_keypress(
                     },
                 )
             }
-
-            Ok(true)
         }
         EditorKey::ArrowLeft
         | EditorKey::ArrowRight
         | EditorKey::ArrowUp
         | EditorKey::ArrowDown => {
             editor_move_cursor(config, key);
-            Ok(true)
         }
-        EditorKey::Other(ESC) | EditorKey::Other(CTRL_L) => Ok(true),
+        EditorKey::Other(ESC) | EditorKey::Other(CTRL_L) => (),
         EditorKey::Other(byte) => {
             editor_insert_char(config, byte as char);
-            Ok(true)
         }
     }
+
+    config.quit_times = RED_QUIT_TIMES;
+    Ok(true)
 }
 
 fn clear_screen(dest: &mut impl Write) -> Result<(), Box<dyn Error>> {
