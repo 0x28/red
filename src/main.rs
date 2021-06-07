@@ -187,6 +187,11 @@ fn editor_row_cursor_to_render(row: &Row, cursor_x: usize) -> usize {
     render_x
 }
 
+fn editor_row_append(row: &mut Row, content: &[char]) {
+    row.line.extend_from_slice(content);
+    editor_update_row(row);
+}
+
 fn editor_update_row(row: &mut Row) {
     row.render.clear();
     let mut idx = 0;
@@ -202,6 +207,13 @@ fn editor_update_row(row: &mut Row) {
             row.render.push(c);
             idx += 1;
         }
+    }
+}
+
+fn editor_delete_row(config: &mut EditorConfig, at: usize) {
+    if at < config.rows.len() {
+        config.rows.remove(at);
+        config.dirty = true;
     }
 }
 
@@ -237,11 +249,22 @@ fn editor_insert_char(config: &mut EditorConfig, c: char) {
 }
 
 fn editor_delete_char(config: &mut EditorConfig) {
+    if config.cursor_x == 0 && config.cursor_y == 0 {
+        return;
+    }
+
     if let Some(row) = config.rows.get_mut(config.cursor_y) {
         if config.cursor_x > 0 {
             editor_row_delete_char(row, config.cursor_x - 1);
             config.cursor_x -= 1;
             config.dirty = true;
+        } else {
+            let line = std::mem::take(&mut row.line);
+            let prev_row = &mut config.rows[config.cursor_y - 1];
+            config.cursor_x = prev_row.line.len();
+            editor_row_append(prev_row, &line);
+            editor_delete_row(config, config.cursor_y);
+            config.cursor_y -= 1;
         }
     }
 }
