@@ -291,6 +291,10 @@ fn editor_delete_char(config: &mut EditorConfig) {
             editor_delete_row(config, config.cursor_y);
             config.cursor_y -= 1;
         }
+    } else if config.cursor_y == config.rows.len() {
+        // NOTE: we are in the last empty line -> nothing to delete
+        config.cursor_y -= 1;
+        config.cursor_x = config.rows[config.cursor_y].line.len();
     }
 }
 
