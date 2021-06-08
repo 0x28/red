@@ -77,6 +77,12 @@ impl Row {
     }
 }
 
+impl Default for Row {
+    fn default() -> Self {
+        Row::empty()
+    }
+}
+
 struct EditorConfig {
     original: Termios,
     cursor_x: usize,
@@ -246,6 +252,25 @@ fn editor_insert_char(config: &mut EditorConfig, c: char) {
 
     config.cursor_x += 1;
     config.dirty = true;
+}
+
+fn editor_insert_newline(config: &mut EditorConfig) {
+    if config.cursor_x == 0 {
+        config.rows.insert(config.cursor_y, Row::empty());
+    } else if let Some(current_row) = config.rows.get_mut(config.cursor_y) {
+        let next_line = current_row.line[config.cursor_x..].to_vec();
+        let mut next_row = Row {
+            line: next_line,
+            render: vec![],
+        };
+        current_row.line.truncate(config.cursor_x);
+        editor_update_row(&mut next_row);
+        editor_update_row(current_row);
+        config.rows.insert(config.cursor_y + 1, next_row);
+    }
+
+    config.cursor_y += 1;
+    config.cursor_x = 0;
 }
 
 fn editor_delete_char(config: &mut EditorConfig) {
@@ -427,7 +452,7 @@ fn editor_process_keypress(
     let key = editor_read_key()?;
     match key {
         EditorKey::Other(b'\r') => {
-            todo!()
+            editor_insert_newline(config);
         }
         EditorKey::Other(CTRL_Q) => {
             if config.dirty && config.quit_times > 0 {
