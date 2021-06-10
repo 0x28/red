@@ -315,7 +315,13 @@ fn editor_write_rows(
 
 fn editor_save(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
     if config.file.is_none() {
-        return Ok(());
+        match editor_prompt(config, "Save as (ESC to cancel)")? {
+            Some(file) => config.file = Some(PathBuf::from(file)),
+            None => {
+                editor_set_status_message!(config, "Save aborted");
+                return Ok(());
+            }
+        }
     }
 
     config.dirty = false;
@@ -410,6 +416,40 @@ fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
     } else {
         Ok(EditorKey::Other(c[0]))
     }
+}
+
+fn editor_prompt(
+    config: &mut EditorConfig,
+    prompt: &str,
+) -> Result<Option<String>, Box<dyn Error>> {
+    let mut result = String::new();
+
+    loop {
+        editor_set_status_message!(config, "{}: {}", prompt, result);
+        editor_refresh_screen(config)?;
+
+        match editor_read_key()? {
+            EditorKey::Delete
+            | EditorKey::Other(BACKSPACE)
+            | EditorKey::Other(CTRL_H) => {
+                result.pop();
+            }
+            EditorKey::Other(ESC) => {
+                editor_set_status_message!(config, "");
+                return Ok(None);
+            }
+            EditorKey::Other(c) if c as char == '\r' && !result.is_empty() => {
+                editor_set_status_message!(config, "");
+                break;
+            }
+            EditorKey::Other(c) if !c.is_ascii_control() && c < 128 => {
+                result.push(c as char);
+            }
+            _ => (),
+        }
+    }
+
+    Ok(Some(result))
 }
 
 fn editor_move_cursor(config: &mut EditorConfig, key: EditorKey) {
