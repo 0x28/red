@@ -382,11 +382,23 @@ fn editor_find_callback(
 }
 
 fn editor_find(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
-    editor_prompt(
+    let saved_cx = config.cursor_x;
+    let saved_cy = config.cursor_y;
+    let saved_coloff = config.col_offset;
+    let saved_rowoff = config.row_offset;
+
+    let input = editor_prompt(
         config,
         "Search (ESC to cancel)",
         Some(editor_find_callback),
     )?;
+    if input.is_none() {
+        config.cursor_x = saved_cx;
+        config.cursor_y = saved_cy;
+        config.col_offset = saved_coloff;
+        config.row_offset = saved_rowoff;
+    }
+
     Ok(())
 }
 
