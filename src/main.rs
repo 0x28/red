@@ -18,6 +18,7 @@ const fn ctrl(c: char) -> u8 {
     c as u8 & 0x1f
 }
 
+const CTRL_F: u8 = ctrl('f');
 const CTRL_H: u8 = ctrl('h');
 const CTRL_L: u8 = ctrl('l');
 const CTRL_Q: u8 = ctrl('q');
@@ -315,7 +316,7 @@ fn editor_write_rows(
 
 fn editor_save(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
     if config.file.is_none() {
-        match editor_prompt(config, "Save as (ESC to cancel)")? {
+        match editor_prompt(config, "Save as (ESC to cancel)", None)? {
             Some(file) => config.file = Some(PathBuf::from(file)),
             None => {
                 editor_set_status_message!(config, "Save aborted");
@@ -353,6 +354,40 @@ fn editor_save(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
     }
+}
+
+fn editor_find_callback(
+    config: &mut EditorConfig,
+    needle: &[char],
+    key: EditorKey,
+) {
+    if let EditorKey::Other(b'\r') | EditorKey::Other(ESC) = key {
+        return;
+    }
+
+    if needle.is_empty() {
+        return;
+    }
+
+    for (y, row) in config.rows.iter().enumerate() {
+        if let Some(idx) =
+            row.line.windows(needle.len()).position(|hay| hay == needle)
+        {
+            config.cursor_y = y;
+            config.cursor_x = idx;
+            config.row_offset = config.rows.len();
+            break;
+        }
+    }
+}
+
+fn editor_find(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
+    editor_prompt(
+        config,
+        "Search (ESC to cancel)",
+        Some(editor_find_callback),
+    )?;
+    Ok(())
 }
 
 fn editor_open(
@@ -421,35 +456,46 @@ fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
 fn editor_prompt(
     config: &mut EditorConfig,
     prompt: &str,
+    callback: Option<fn(&mut EditorConfig, &[char], EditorKey)>,
 ) -> Result<Option<String>, Box<dyn Error>> {
-    let mut result = String::new();
+    let mut str_input = String::new();
+    let mut vec_input = vec![];
+    let callback = match callback {
+        Some(f) => f,
+        None => |_: &mut EditorConfig, _: &[char], _: EditorKey| {},
+    };
 
     loop {
-        editor_set_status_message!(config, "{}: {}", prompt, result);
+        editor_set_status_message!(config, "{}: {}", prompt, str_input);
         editor_refresh_screen(config)?;
 
-        match editor_read_key()? {
+        let key = editor_read_key()?;
+        match key {
             EditorKey::Delete
             | EditorKey::Other(BACKSPACE)
             | EditorKey::Other(CTRL_H) => {
-                result.pop();
+                str_input.pop();
+                vec_input.pop();
             }
             EditorKey::Other(ESC) => {
                 editor_set_status_message!(config, "");
+                callback(config, &vec_input, key);
                 return Ok(None);
             }
-            EditorKey::Other(c) if c as char == '\r' && !result.is_empty() => {
+            EditorKey::Other(b'\r') if !str_input.is_empty() => {
                 editor_set_status_message!(config, "");
-                break;
+                callback(config, &vec_input, key);
+                return Ok(Some(str_input));
             }
             EditorKey::Other(c) if !c.is_ascii_control() && c < 128 => {
-                result.push(c as char);
+                str_input.push(c as char);
+                vec_input.push(c as char);
             }
             _ => (),
         }
-    }
 
-    Ok(Some(result))
+        callback(config, &vec_input, key);
+    }
 }
 
 fn editor_move_cursor(config: &mut EditorConfig, key: EditorKey) {
@@ -524,6 +570,7 @@ fn editor_process_keypress(
                 config.cursor_x = row.line.len();
             }
         }
+        EditorKey::Other(CTRL_F) => editor_find(config)?,
         EditorKey::Delete
         | EditorKey::Other(BACKSPACE)
         | EditorKey::Other(CTRL_H) => {
@@ -764,7 +811,7 @@ fn main() {
 
     editor_set_status_message!(
         &mut conf,
-        "HELP: Ctrl-S = save | Ctrl-Q = quit"
+        "HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find"
     );
 
     if let Err(e) = editor(&mut conf) {
