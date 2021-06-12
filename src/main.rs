@@ -1,9 +1,12 @@
 use libc::STDIN_FILENO;
 use std::cmp::Ordering;
+use std::env;
+use std::error::Error;
+use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::path::{Path, PathBuf};
+use std::sync::{atomic, atomic::AtomicBool, Arc};
 use std::time::SystemTime;
-use std::{env, error::Error, path::Path};
-use std::{fs::File, path::PathBuf};
 use termios::{
     Termios, BRKINT, CS8, ECHO, ICANON, ICRNL, IEXTEN, INPCK, ISIG, ISTRIP,
     IXON, OPOST, TCSAFLUSH, VMIN, VTIME,
@@ -43,6 +46,7 @@ fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
 const RED_VERSION: &str = env!("CARGO_PKG_VERSION");
 const RED_TAB_STOP: usize = 8;
 const RED_QUIT_TIMES: u8 = 3;
+const RED_STATUS_HEIGHT: usize = 2;
 
 macro_rules! editor_set_status_message {
     ($config: expr, $($arg:tt)*) => {
@@ -129,6 +133,7 @@ struct EditorConfig {
     quit_times: u8,
     search_dir: SearchDirection,
     last_match: Option<usize>,
+    win_changed: Arc<AtomicBool>,
 }
 
 impl EditorConfig {
@@ -137,12 +142,18 @@ impl EditorConfig {
         enable_raw_mode()?;
         let (rows, cols) = get_window_size()?;
 
+        let win_changed = Arc::new(AtomicBool::new(false));
+        signal_hook::flag::register(
+            signal_hook::consts::SIGWINCH,
+            Arc::clone(&win_changed),
+        )?;
+
         Ok(EditorConfig {
             original,
             cursor_x: 0,
             cursor_y: 0,
             render_x: 0,
-            screen_rows: rows - 2,
+            screen_rows: rows - RED_STATUS_HEIGHT,
             screen_cols: cols,
             row_offset: 0,
             col_offset: 0,
@@ -154,6 +165,7 @@ impl EditorConfig {
             quit_times: RED_QUIT_TIMES,
             search_dir: SearchDirection::Forward,
             last_match: None,
+            win_changed,
         })
     }
 }
@@ -489,9 +501,27 @@ fn editor_open(
     Ok(())
 }
 
-fn editor_read_key() -> Result<EditorKey, Box<dyn Error>> {
+fn editor_maybe_update_screen(
+    config: &mut EditorConfig,
+) -> Result<(), Box<dyn Error>> {
+    if config.win_changed.load(atomic::Ordering::Relaxed) {
+        let (rows, cols) = get_window_size()?;
+        config.screen_rows = rows - RED_STATUS_HEIGHT;
+        config.screen_cols = cols;
+        editor_refresh_screen(config)?;
+        config.win_changed.store(false, atomic::Ordering::Relaxed);
+    }
+
+    Ok(())
+}
+
+fn editor_read_key(
+    config: &mut EditorConfig,
+) -> Result<EditorKey, Box<dyn Error>> {
     let mut c = [0; 1];
-    while io::stdin().read(&mut c)? != 1 {}
+    while io::stdin().read(&mut c)? != 1 {
+        editor_maybe_update_screen(config)?;
+    }
 
     if c[0] == ESC {
         let mut seq = [0; 3];
@@ -543,7 +573,7 @@ fn editor_prompt(
         editor_set_status_message!(config, "{}: {}", prompt, str_input);
         editor_refresh_screen(config)?;
 
-        let key = editor_read_key()?;
+        let key = editor_read_key(config)?;
         match key {
             EditorKey::Delete
             | EditorKey::Other(BACKSPACE)
@@ -613,7 +643,7 @@ fn editor_move_cursor(config: &mut EditorConfig, key: EditorKey) {
 fn editor_process_keypress(
     config: &mut EditorConfig,
 ) -> Result<bool, Box<dyn Error>> {
-    let key = editor_read_key()?;
+    let key = editor_read_key(config)?;
     match key {
         EditorKey::Other(b'\r') => {
             editor_insert_newline(config);
