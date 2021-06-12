@@ -64,6 +64,34 @@ enum EditorKey {
     Other(u8),
 }
 
+enum SearchDirection {
+    Forward,
+    Backward,
+}
+
+impl SearchDirection {
+    fn step(&self, value: usize, limit: usize) -> usize {
+        match self {
+            SearchDirection::Forward => {
+                let next = value.wrapping_add(1);
+                if next >= limit {
+                    0
+                } else {
+                    next
+                }
+            }
+            SearchDirection::Backward => {
+                let prev = value.wrapping_sub(1);
+                if prev >= limit {
+                    limit
+                } else {
+                    0
+                }
+            }
+        }
+    }
+}
+
 struct Row {
     line: Vec<char>,
     render: Vec<char>,
@@ -99,6 +127,8 @@ struct EditorConfig {
     status_time: SystemTime,
     dirty: bool,
     quit_times: u8,
+    search_dir: SearchDirection,
+    last_match: Option<usize>,
 }
 
 impl EditorConfig {
@@ -122,6 +152,8 @@ impl EditorConfig {
             status_time: SystemTime::UNIX_EPOCH,
             dirty: false,
             quit_times: RED_QUIT_TIMES,
+            search_dir: SearchDirection::Forward,
+            last_match: None,
         })
     }
 }
@@ -361,19 +393,49 @@ fn editor_find_callback(
     needle: &[char],
     key: EditorKey,
 ) {
-    if let EditorKey::Other(b'\r') | EditorKey::Other(ESC) = key {
-        return;
-    }
-
     if needle.is_empty() {
         return;
     }
 
-    for (y, row) in config.rows.iter().enumerate() {
+    match key {
+        EditorKey::Other(b'\r') | EditorKey::Other(ESC) => {
+            config.last_match = None;
+            config.search_dir = SearchDirection::Forward;
+            return;
+        }
+        EditorKey::ArrowRight
+        | EditorKey::ArrowDown
+        | EditorKey::Other(CTRL_F) => {
+            config.search_dir = SearchDirection::Forward;
+        }
+        EditorKey::ArrowLeft | EditorKey::ArrowUp => {
+            config.search_dir = SearchDirection::Backward;
+        }
+        _ => {
+            config.last_match = None;
+            config.search_dir = SearchDirection::Forward;
+        }
+    }
+
+    if config.last_match.is_none() {
+        config.search_dir = SearchDirection::Forward;
+    }
+
+    let mut search_idx = config.last_match.unwrap_or(config.rows.len());
+
+    for _ in 0..config.rows.len() {
+        search_idx = config.search_dir.step(search_idx, config.rows.len() - 1);
+
+        let row = config
+            .rows
+            .get(search_idx)
+            .expect("search index should always be valid!");
+
         if let Some(idx) =
             row.line.windows(needle.len()).position(|hay| hay == needle)
         {
-            config.cursor_y = y;
+            config.last_match = Some(search_idx);
+            config.cursor_y = search_idx;
             config.cursor_x = idx;
             config.row_offset = config.rows.len();
             break;
@@ -389,7 +451,7 @@ fn editor_find(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
 
     let input = editor_prompt(
         config,
-        "Search (ESC to cancel)",
+        "Search (ESC/Arrows/Enter)",
         Some(editor_find_callback),
     )?;
     if input.is_none() {
