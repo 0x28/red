@@ -39,6 +39,7 @@ const ESC_SEQ_CLEAR_LINE: &[u8] = b"\x1b[K";
 const ESC_SEQ_INVERT_COLORS: &[u8] = b"\x1b[7m";
 const ESC_SEQ_RESET_ALL: &[u8] = b"\x1b[m";
 const ESC_SEQ_COLOR_RED: &[u8] = b"\x1b[31m";
+const ESC_SEQ_COLOR_BLUE: &[u8] = b"\x1b[34m";
 const ESC_SEQ_COLOR_WHITE: &[u8] = b"\x1b[37m";
 const ESC_SEQ_COLOR_DEFAULT: &[u8] = b"\x1b[39m";
 
@@ -109,6 +110,7 @@ struct Row {
 enum Highlight {
     Normal,
     Number,
+    Match,
 }
 
 impl Highlight {
@@ -117,6 +119,7 @@ impl Highlight {
         match self {
             Highlight::Normal => ESC_SEQ_COLOR_DEFAULT,
             Highlight::Number => ESC_SEQ_COLOR_RED,
+            Highlight::Match => ESC_SEQ_COLOR_BLUE,
             _ => ESC_SEQ_COLOR_WHITE,
         }
     }
@@ -156,6 +159,7 @@ struct EditorConfig {
     search_dir: SearchDirection,
     last_match: Option<usize>,
     win_changed: Arc<AtomicBool>,
+    stored_hl: Option<(usize, Vec<Highlight>)>,
 }
 
 impl EditorConfig {
@@ -188,6 +192,7 @@ impl EditorConfig {
             search_dir: SearchDirection::Forward,
             last_match: None,
             win_changed,
+            stored_hl: None,
         })
     }
 }
@@ -444,6 +449,11 @@ fn editor_find_callback(
         return;
     }
 
+    if let Some((idx, highlight)) = &config.stored_hl {
+        config.rows[*idx].highlights = highlight.clone();
+        config.stored_hl = None;
+    }
+
     match key {
         EditorKey::Other(b'\r') | EditorKey::Other(ESC) => {
             config.last_match = None;
@@ -473,9 +483,10 @@ fn editor_find_callback(
     for _ in 0..config.rows.len() {
         search_idx = config.search_dir.step(search_idx, config.rows.len() - 1);
 
+        let num_rows = config.rows.len();
         let row = config
             .rows
-            .get(search_idx)
+            .get_mut(search_idx)
             .expect("search index should always be valid!");
 
         if let Some(idx) =
@@ -484,7 +495,12 @@ fn editor_find_callback(
             config.last_match = Some(search_idx);
             config.cursor_y = search_idx;
             config.cursor_x = idx;
-            config.row_offset = config.rows.len();
+            config.row_offset = num_rows;
+
+            config.stored_hl = Some((search_idx, row.highlights.clone()));
+            for hl in &mut row.highlights[idx..idx + needle.len()] {
+                *hl = Highlight::Match;
+            }
             break;
         }
     }
