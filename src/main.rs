@@ -37,7 +37,10 @@ const ESC_SEQ_HIDE_CURSOR: &[u8] = b"\x1b[?25l";
 const ESC_SEQ_SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 const ESC_SEQ_CLEAR_LINE: &[u8] = b"\x1b[K";
 const ESC_SEQ_INVERT_COLORS: &[u8] = b"\x1b[7m";
-const ESC_SEQ_RESET_COLORS: &[u8] = b"\x1b[m";
+const ESC_SEQ_RESET_ALL: &[u8] = b"\x1b[m";
+const ESC_SEQ_COLOR_RED: &[u8] = b"\x1b[31m";
+const ESC_SEQ_COLOR_WHITE: &[u8] = b"\x1b[37m";
+const ESC_SEQ_COLOR_DEFAULT: &[u8] = b"\x1b[39m";
 
 fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
     format!("\x1b[{};{}H", pos_y, pos_x).into_bytes()
@@ -99,6 +102,24 @@ impl SearchDirection {
 struct Row {
     line: Vec<char>,
     render: Vec<char>,
+    highlights: Vec<Highlight>,
+}
+
+#[derive(Clone, PartialEq)]
+enum Highlight {
+    Normal,
+    Number,
+}
+
+impl Highlight {
+    fn color(&self) -> &[u8] {
+        #[allow(unreachable_patterns)]
+        match self {
+            Highlight::Normal => ESC_SEQ_COLOR_DEFAULT,
+            Highlight::Number => ESC_SEQ_COLOR_RED,
+            _ => ESC_SEQ_COLOR_WHITE,
+        }
+    }
 }
 
 impl Row {
@@ -106,6 +127,7 @@ impl Row {
         Row {
             line: vec![],
             render: vec![],
+            highlights: vec![],
         }
     }
 }
@@ -225,6 +247,16 @@ fn get_window_size() -> Result<(usize, usize), Box<dyn Error>> {
     get_cursor_position()
 }
 
+fn editor_update_syntax(row: &mut Row) {
+    row.highlights.resize(row.render.len(), Highlight::Normal);
+
+    for (idx, c) in row.render.iter().enumerate() {
+        if c.is_digit(10) {
+            row.highlights[idx] = Highlight::Number;
+        }
+    }
+}
+
 fn editor_row_cursor_to_render(row: &Row, cursor_x: usize) -> usize {
     let mut render_x = 0;
 
@@ -259,6 +291,8 @@ fn editor_update_row(row: &mut Row) {
             idx += 1;
         }
     }
+
+    editor_update_syntax(row);
 }
 
 fn editor_delete_row(config: &mut EditorConfig, at: usize) {
@@ -307,6 +341,7 @@ fn editor_insert_newline(config: &mut EditorConfig) {
         let mut next_row = Row {
             line: next_line,
             render: vec![],
+            highlights: vec![],
         };
         current_row.line.truncate(config.cursor_x);
         editor_update_row(&mut next_row);
@@ -491,6 +526,7 @@ fn editor_open(
         let mut row = Row {
             line,
             render: vec![],
+            highlights: vec![],
         };
         editor_update_row(&mut row);
         config.rows.push(row);
@@ -779,14 +815,22 @@ fn editor_draw_rows(
         } else {
             // NOTE: Ensure that only the first screen_cols glyphs of the
             // line are printed!
-            let truncated_line = config.rows[filerow]
+            let mut prev_color = None;
+            for (c, hl) in config.rows[filerow]
                 .render
                 .iter()
+                .zip(config.rows[filerow].highlights.iter())
                 .skip(config.col_offset)
                 .take(config.screen_cols)
-                .collect::<String>();
-
-            dest.write_all(&truncated_line.into_bytes())?;
+            {
+                let current_color = Some(hl);
+                if prev_color != current_color {
+                    dest.write_all(hl.color())?;
+                    prev_color = current_color;
+                }
+                dest.write_all(&c.to_string().into_bytes())?;
+            }
+            dest.write_all(ESC_SEQ_COLOR_DEFAULT)?;
         }
         dest.write_all(ESC_SEQ_CLEAR_LINE)?;
         dest.write_all(b"\r\n")?;
@@ -825,7 +869,7 @@ fn editor_draw_status_bar(
         }
     }
 
-    dest.write_all(ESC_SEQ_RESET_COLORS)?;
+    dest.write_all(ESC_SEQ_RESET_ALL)?;
     dest.write_all(b"\r\n")?;
 
     Ok(())
