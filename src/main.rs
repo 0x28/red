@@ -252,13 +252,27 @@ fn get_window_size() -> Result<(usize, usize), Box<dyn Error>> {
     get_cursor_position()
 }
 
+fn is_seperator(c: char) -> bool {
+    c.is_whitespace() || c == '\0' || ",.()+-/*=~%<>[];".contains(c)
+}
+
 fn editor_update_syntax(row: &mut Row) {
     row.highlights.resize(row.render.len(), Highlight::Normal);
+    row.highlights.fill(Highlight::Normal);
 
-    for (idx, c) in row.render.iter().enumerate() {
-        if c.is_digit(10) {
+    let mut prev_sep = true;
+
+    for (idx, &c) in row.render.iter().enumerate() {
+        let prev_hl = row
+            .highlights
+            .get(idx.wrapping_sub(1))
+            .unwrap_or(&Highlight::Normal);
+        if c.is_digit(10) && (prev_sep || *prev_hl == Highlight::Number)
+            || (c == '.' && *prev_hl == Highlight::Number)
+        {
             row.highlights[idx] = Highlight::Number;
         }
+        prev_sep = is_seperator(c);
     }
 }
 
