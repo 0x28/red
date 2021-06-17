@@ -2,6 +2,7 @@ use libc::STDIN_FILENO;
 use std::cmp::Ordering;
 use std::env;
 use std::error::Error;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -113,6 +114,27 @@ enum Highlight {
     Match,
 }
 
+const HIGHLIGHT_NUMBERS: u32 = 1 << 0;
+
+struct Syntax {
+    name: &'static str,
+    extensions: &'static [&'static str],
+    flags: u32,
+}
+
+const SYNTAXES: &[Syntax] = &[
+    Syntax {
+        name: "c",
+        extensions: &[".c", ".h", ".cpp"],
+        flags: HIGHLIGHT_NUMBERS,
+    },
+    Syntax {
+        name: "rust",
+        extensions: &[".rs"],
+        flags: HIGHLIGHT_NUMBERS,
+    },
+];
+
 impl Highlight {
     fn color(&self) -> &[u8] {
         #[allow(unreachable_patterns)]
@@ -160,6 +182,7 @@ struct EditorConfig {
     last_match: Option<usize>,
     win_changed: Arc<AtomicBool>,
     stored_hl: Option<(usize, Vec<Highlight>)>,
+    syntax: Option<&'static Syntax>,
 }
 
 impl EditorConfig {
@@ -193,6 +216,7 @@ impl EditorConfig {
             last_match: None,
             win_changed,
             stored_hl: None,
+            syntax: None,
         })
     }
 }
@@ -256,9 +280,14 @@ fn is_seperator(c: char) -> bool {
     c.is_whitespace() || c == '\0' || ",.()+-/*=~%<>[];".contains(c)
 }
 
-fn editor_update_syntax(row: &mut Row) {
+fn editor_update_syntax(row: &mut Row, syntax: Option<&Syntax>) {
     row.highlights.resize(row.render.len(), Highlight::Normal);
     row.highlights.fill(Highlight::Normal);
+
+    let syntax = match syntax {
+        Some(s) => s,
+        None => return,
+    };
 
     let mut prev_sep = true;
 
@@ -267,12 +296,39 @@ fn editor_update_syntax(row: &mut Row) {
             .highlights
             .get(idx.wrapping_sub(1))
             .unwrap_or(&Highlight::Normal);
-        if c.is_digit(10) && (prev_sep || *prev_hl == Highlight::Number)
-            || (c == '.' && *prev_hl == Highlight::Number)
+
+        if syntax.flags & HIGHLIGHT_NUMBERS != 0
+            && (c.is_digit(10) && (prev_sep || *prev_hl == Highlight::Number)
+                || (c == '.' && *prev_hl == Highlight::Number))
         {
             row.highlights[idx] = Highlight::Number;
         }
+
         prev_sep = is_seperator(c);
+    }
+}
+
+fn editor_select_syntax_highlight(config: &mut EditorConfig) {
+    config.syntax = None;
+    let file = match &config.file {
+        Some(f) => f,
+        None => return,
+    };
+
+    let file_ext = file.extension().map(OsStr::to_str).flatten();
+
+    config.syntax = SYNTAXES.iter().find(|syntax| {
+        syntax.extensions.iter().any(|ext| {
+            let is_ext = ext.starts_with('.');
+            is_ext && Some(&ext[1..]) == file_ext
+                || !is_ext && file.to_string_lossy().contains(ext)
+        })
+    });
+
+    if config.syntax.is_some() {
+        for row in &mut config.rows {
+            editor_update_syntax(row, config.syntax);
+        }
     }
 }
 
@@ -289,12 +345,12 @@ fn editor_row_cursor_to_render(row: &Row, cursor_x: usize) -> usize {
     render_x
 }
 
-fn editor_row_append(row: &mut Row, content: &[char]) {
+fn editor_row_append(row: &mut Row, content: &[char], syntax: Option<&Syntax>) {
     row.line.extend_from_slice(content);
-    editor_update_row(row);
+    editor_update_row(row, syntax);
 }
 
-fn editor_update_row(row: &mut Row) {
+fn editor_update_row(row: &mut Row, syntax: Option<&Syntax>) {
     row.render.clear();
     let mut idx = 0;
     for &c in row.line.iter() {
@@ -311,7 +367,7 @@ fn editor_update_row(row: &mut Row) {
         }
     }
 
-    editor_update_syntax(row);
+    editor_update_syntax(row, syntax);
 }
 
 fn editor_delete_row(config: &mut EditorConfig, at: usize) {
@@ -321,19 +377,24 @@ fn editor_delete_row(config: &mut EditorConfig, at: usize) {
     }
 }
 
-fn editor_row_insert_char(row: &mut Row, mut at: usize, c: char) {
+fn editor_row_insert_char(
+    row: &mut Row,
+    mut at: usize,
+    c: char,
+    syntax: Option<&Syntax>,
+) {
     if at > row.line.len() {
         at = row.line.len();
     }
 
     row.line.insert(at, c);
-    editor_update_row(row);
+    editor_update_row(row, syntax);
 }
 
-fn editor_row_delete_char(row: &mut Row, at: usize) {
+fn editor_row_delete_char(row: &mut Row, at: usize, syntax: Option<&Syntax>) {
     if at < row.line.len() {
         row.line.remove(at);
-        editor_update_row(row);
+        editor_update_row(row, syntax);
     }
 }
 
@@ -346,6 +407,7 @@ fn editor_insert_char(config: &mut EditorConfig, c: char) {
         &mut config.rows[config.cursor_y],
         config.cursor_x,
         c,
+        config.syntax,
     );
 
     config.cursor_x += 1;
@@ -363,8 +425,8 @@ fn editor_insert_newline(config: &mut EditorConfig) {
             highlights: vec![],
         };
         current_row.line.truncate(config.cursor_x);
-        editor_update_row(&mut next_row);
-        editor_update_row(current_row);
+        editor_update_row(&mut next_row, config.syntax);
+        editor_update_row(current_row, config.syntax);
         config.rows.insert(config.cursor_y + 1, next_row);
     }
 
@@ -379,14 +441,14 @@ fn editor_delete_char(config: &mut EditorConfig) {
 
     if let Some(row) = config.rows.get_mut(config.cursor_y) {
         if config.cursor_x > 0 {
-            editor_row_delete_char(row, config.cursor_x - 1);
+            editor_row_delete_char(row, config.cursor_x - 1, config.syntax);
             config.cursor_x -= 1;
             config.dirty = true;
         } else {
             let line = std::mem::take(&mut row.line);
             let prev_row = &mut config.rows[config.cursor_y - 1];
             config.cursor_x = prev_row.line.len();
-            editor_row_append(prev_row, &line);
+            editor_row_append(prev_row, &line, config.syntax);
             editor_delete_row(config, config.cursor_y);
             config.cursor_y -= 1;
         }
@@ -422,6 +484,7 @@ fn editor_save(config: &mut EditorConfig) -> Result<(), Box<dyn Error>> {
             }
         }
     }
+    editor_select_syntax_highlight(config);
 
     config.dirty = false;
     let mut write_to_file = || -> Result<(), Box<dyn Error>> {
@@ -558,11 +621,12 @@ fn editor_open(
             render: vec![],
             highlights: vec![],
         };
-        editor_update_row(&mut row);
+        editor_update_row(&mut row, config.syntax);
         config.rows.push(row);
     }
 
     config.file = Some(file_path.to_owned());
+    editor_select_syntax_highlight(config);
 
     Ok(())
 }
@@ -884,7 +948,13 @@ fn editor_draw_status_bar(
     );
     dest.write_all(status_left.as_bytes())?;
 
-    let status_right = format!("{}/{}", config.cursor_y + 1, config.rows.len());
+    let syntax_name = config.syntax.map(|s| s.name).unwrap_or("no ft");
+    let status_right = format!(
+        "{} | {}/{}",
+        syntax_name,
+        config.cursor_y + 1,
+        config.rows.len()
+    );
 
     for len in status_left.len()..config.screen_cols {
         if config.screen_cols - len == status_right.len() {
