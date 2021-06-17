@@ -469,7 +469,7 @@ fn editor_find_callback(
     }
 
     match key {
-        EditorKey::Other(b'\r') | EditorKey::Other(ESC) => {
+        EditorKey::Other(b'\r' | ESC) => {
             config.last_match = None;
             config.search_dir = SearchDirection::Forward;
             return;
@@ -641,9 +641,7 @@ fn editor_prompt(
 
         let key = editor_read_key(config)?;
         match key {
-            EditorKey::Delete
-            | EditorKey::Other(BACKSPACE)
-            | EditorKey::Other(CTRL_H) => {
+            EditorKey::Delete | EditorKey::Other(BACKSPACE | CTRL_H) => {
                 str_input.pop();
                 vec_input.pop();
             }
@@ -741,9 +739,7 @@ fn editor_process_keypress(
             }
         }
         EditorKey::Other(CTRL_F) => editor_find(config)?,
-        EditorKey::Delete
-        | EditorKey::Other(BACKSPACE)
-        | EditorKey::Other(CTRL_H) => {
+        EditorKey::Delete | EditorKey::Other(BACKSPACE | CTRL_H) => {
             if key == EditorKey::Delete {
                 editor_move_cursor(config, EditorKey::ArrowRight);
             }
@@ -777,7 +773,7 @@ fn editor_process_keypress(
         | EditorKey::ArrowDown => {
             editor_move_cursor(config, key);
         }
-        EditorKey::Other(ESC) | EditorKey::Other(CTRL_L) => (),
+        EditorKey::Other(ESC | CTRL_L) => (),
         EditorKey::Other(byte) => {
             editor_insert_char(config, byte as char);
         }
