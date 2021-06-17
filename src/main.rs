@@ -83,7 +83,7 @@ impl SearchDirection {
         match self {
             SearchDirection::Forward => {
                 let next = value.wrapping_add(1);
-                if next >= limit {
+                if next > limit {
                     0
                 } else {
                     next
@@ -91,10 +91,10 @@ impl SearchDirection {
             }
             SearchDirection::Backward => {
                 let prev = value.wrapping_sub(1);
-                if prev >= limit {
+                if prev > limit {
                     limit
                 } else {
-                    0
+                    prev
                 }
             }
         }
