@@ -41,6 +41,7 @@ const ESC_SEQ_INVERT_COLORS: &[u8] = b"\x1b[7m";
 const ESC_SEQ_RESET_ALL: &[u8] = b"\x1b[m";
 const ESC_SEQ_COLOR_RED: &[u8] = b"\x1b[31m";
 const ESC_SEQ_COLOR_BLUE: &[u8] = b"\x1b[34m";
+const ESC_SEQ_COLOR_MAGENTA: &[u8] = b"\x1b[35m";
 const ESC_SEQ_COLOR_WHITE: &[u8] = b"\x1b[37m";
 const ESC_SEQ_COLOR_DEFAULT: &[u8] = b"\x1b[39m";
 
@@ -110,11 +111,13 @@ struct Row {
 #[derive(Clone, PartialEq)]
 enum Highlight {
     Normal,
+    String,
     Number,
     Match,
 }
 
 const HIGHLIGHT_NUMBERS: u32 = 1 << 0;
+const HIGHLIGHT_STRINGS: u32 = 1 << 1;
 
 struct Syntax {
     name: &'static str,
@@ -126,12 +129,12 @@ const SYNTAXES: &[Syntax] = &[
     Syntax {
         name: "c",
         extensions: &[".c", ".h", ".cpp"],
-        flags: HIGHLIGHT_NUMBERS,
+        flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS,
     },
     Syntax {
         name: "rust",
         extensions: &[".rs"],
-        flags: HIGHLIGHT_NUMBERS,
+        flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS,
     },
 ];
 
@@ -140,6 +143,7 @@ impl Highlight {
         #[allow(unreachable_patterns)]
         match self {
             Highlight::Normal => ESC_SEQ_COLOR_DEFAULT,
+            Highlight::String => ESC_SEQ_COLOR_MAGENTA,
             Highlight::Number => ESC_SEQ_COLOR_RED,
             Highlight::Match => ESC_SEQ_COLOR_BLUE,
             _ => ESC_SEQ_COLOR_WHITE,
@@ -290,16 +294,40 @@ fn editor_update_syntax(row: &mut Row, syntax: Option<&Syntax>) {
     };
 
     let mut prev_sep = true;
+    let mut in_string = None;
 
-    for (idx, &c) in row.render.iter().enumerate() {
+    let mut iter = row.render.iter().enumerate();
+
+    while let Some((idx, &c)) = iter.next() {
         let prev_hl = row
             .highlights
             .get(idx.wrapping_sub(1))
-            .unwrap_or(&Highlight::Normal);
+            .unwrap_or(&Highlight::Normal)
+            .clone();
+
+        if syntax.flags & HIGHLIGHT_STRINGS != 0 {
+            if let Some(delimit) = in_string {
+                row.highlights[idx] = Highlight::String;
+                if c == '\\' {
+                    if let Some((i, _)) = iter.next() {
+                        row.highlights[i] = Highlight::String;
+                        continue;
+                    }
+                } else if c == delimit {
+                    in_string = None;
+                }
+                prev_sep = true;
+                continue;
+            } else if c == '"' {
+                in_string = Some(c);
+                row.highlights[idx] = Highlight::String;
+                continue;
+            }
+        }
 
         if syntax.flags & HIGHLIGHT_NUMBERS != 0
-            && (c.is_digit(10) && (prev_sep || *prev_hl == Highlight::Number)
-                || (c == '.' && *prev_hl == Highlight::Number))
+            && (c.is_digit(10) && (prev_sep || prev_hl == Highlight::Number)
+                || (c == '.' && prev_hl == Highlight::Number))
         {
             row.highlights[idx] = Highlight::Number;
         }
