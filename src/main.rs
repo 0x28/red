@@ -42,6 +42,7 @@ const ESC_SEQ_RESET_ALL: &[u8] = b"\x1b[m";
 const ESC_SEQ_COLOR_RED: &[u8] = b"\x1b[31m";
 const ESC_SEQ_COLOR_BLUE: &[u8] = b"\x1b[34m";
 const ESC_SEQ_COLOR_MAGENTA: &[u8] = b"\x1b[35m";
+const ESC_SEQ_COLOR_CYAN: &[u8] = b"\x1b[36m";
 const ESC_SEQ_COLOR_WHITE: &[u8] = b"\x1b[37m";
 const ESC_SEQ_COLOR_DEFAULT: &[u8] = b"\x1b[39m";
 
@@ -111,6 +112,7 @@ struct Row {
 #[derive(Clone, PartialEq)]
 enum Highlight {
     Normal,
+    Comment,
     String,
     Number,
     Match,
@@ -122,6 +124,7 @@ const HIGHLIGHT_STRINGS: u32 = 1 << 1;
 struct Syntax {
     name: &'static str,
     extensions: &'static [&'static str],
+    single_line_comment: &'static str,
     flags: u32,
 }
 
@@ -129,11 +132,13 @@ const SYNTAXES: &[Syntax] = &[
     Syntax {
         name: "c",
         extensions: &[".c", ".h", ".cpp"],
+        single_line_comment: "//",
         flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS,
     },
     Syntax {
         name: "rust",
         extensions: &[".rs"],
+        single_line_comment: "//",
         flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS,
     },
 ];
@@ -146,6 +151,7 @@ impl Highlight {
             Highlight::String => ESC_SEQ_COLOR_MAGENTA,
             Highlight::Number => ESC_SEQ_COLOR_RED,
             Highlight::Match => ESC_SEQ_COLOR_BLUE,
+            Highlight::Comment => ESC_SEQ_COLOR_CYAN,
             _ => ESC_SEQ_COLOR_WHITE,
         }
     }
@@ -295,6 +301,8 @@ fn editor_update_syntax(row: &mut Row, syntax: Option<&Syntax>) {
 
     let mut prev_sep = true;
     let mut in_string = None;
+    let single_line_comment =
+        syntax.single_line_comment.chars().collect::<Vec<_>>();
 
     let mut iter = row.render.iter().enumerate();
 
@@ -304,6 +312,14 @@ fn editor_update_syntax(row: &mut Row, syntax: Option<&Syntax>) {
             .get(idx.wrapping_sub(1))
             .unwrap_or(&Highlight::Normal)
             .clone();
+
+        if in_string.is_none()
+            && !single_line_comment.is_empty()
+            && row.render[idx..].starts_with(&single_line_comment)
+        {
+            row.highlights[idx..].fill(Highlight::Comment);
+            break;
+        }
 
         if syntax.flags & HIGHLIGHT_STRINGS != 0 {
             if let Some(delimit) = in_string {
@@ -603,9 +619,7 @@ fn editor_find_callback(
             config.row_offset = num_rows;
 
             config.stored_hl = Some((search_idx, row.highlights.clone()));
-            for hl in &mut row.highlights[idx..idx + needle.len()] {
-                *hl = Highlight::Match;
-            }
+            row.highlights[idx..idx + needle.len()].fill(Highlight::Match);
             break;
         }
     }
