@@ -286,7 +286,7 @@ fn get_window_size() -> Result<(usize, usize), Box<dyn Error>> {
     get_cursor_position()
 }
 
-fn is_seperator(c: char) -> bool {
+fn is_separator(c: char) -> bool {
     c.is_whitespace() || c == '\0' || ",.()+-/*=~%<>[];".contains(c)
 }
 
@@ -348,7 +348,7 @@ fn editor_update_syntax(row: &mut Row, syntax: Option<&Syntax>) {
             row.highlights[idx] = Highlight::Number;
         }
 
-        prev_sep = is_seperator(c);
+        prev_sep = is_separator(c);
     }
 }
 
