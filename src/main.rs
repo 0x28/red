@@ -40,10 +40,12 @@ const ESC_SEQ_CLEAR_LINE: &[u8] = b"\x1b[K";
 const ESC_SEQ_INVERT_COLORS: &[u8] = b"\x1b[7m";
 const ESC_SEQ_RESET_ALL: &[u8] = b"\x1b[m";
 const ESC_SEQ_COLOR_RED: &[u8] = b"\x1b[31m";
+const ESC_SEQ_COLOR_GREEN: &[u8] = b"\x1b[32m";
+const ESC_SEQ_COLOR_YELLOW: &[u8] = b"\x1b[33m";
 const ESC_SEQ_COLOR_BLUE: &[u8] = b"\x1b[34m";
 const ESC_SEQ_COLOR_MAGENTA: &[u8] = b"\x1b[35m";
 const ESC_SEQ_COLOR_CYAN: &[u8] = b"\x1b[36m";
-const ESC_SEQ_COLOR_WHITE: &[u8] = b"\x1b[37m";
+// const ESC_SEQ_COLOR_WHITE: &[u8] = b"\x1b[37m";
 const ESC_SEQ_COLOR_DEFAULT: &[u8] = b"\x1b[39m";
 
 fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
@@ -109,10 +111,12 @@ struct Row {
     highlights: Vec<Highlight>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 enum Highlight {
     Normal,
     Comment,
+    Keyword,
+    Type,
     String,
     Number,
     Match,
@@ -125,6 +129,8 @@ struct Syntax {
     name: &'static str,
     extensions: &'static [&'static str],
     single_line_comment: &'static str,
+    keywords: &'static [&'static str],
+    types: &'static [&'static str],
     flags: u32,
 }
 
@@ -133,12 +139,32 @@ const SYNTAXES: &[Syntax] = &[
         name: "c",
         extensions: &[".c", ".h", ".cpp"],
         single_line_comment: "//",
+        keywords: &[
+            "switch", "if", "while", "for", "break", "continue", "return",
+            "else", "struct", "union", "typedef", "static", "enum", "class",
+            "case",
+        ],
+        types: &[
+            "int", "long", "double", "float", "char", "unsigned", "signed",
+            "void",
+        ],
         flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS,
     },
     Syntax {
         name: "rust",
         extensions: &[".rs"],
         single_line_comment: "//",
+        keywords: &[
+            "as", "break", "const", "continue", "crate", "else", "enum",
+            "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop",
+            "match", "mod", "move", "mut", "pub", "ref", "return", "self",
+            "Self", "static", "struct", "super", "trait", "true", "type",
+            "unsafe", "use", "where", "while", "async", "await", "dyn",
+        ],
+        types: &[
+            "bool", "char", "f32", "f64", "i128", "i16", "i32", "i64", "i8",
+            "isize", "str", "u128", "u16", "u32", "u64", "u8", "usize",
+        ],
         flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS,
     },
 ];
@@ -152,7 +178,8 @@ impl Highlight {
             Highlight::Number => ESC_SEQ_COLOR_RED,
             Highlight::Match => ESC_SEQ_COLOR_BLUE,
             Highlight::Comment => ESC_SEQ_COLOR_CYAN,
-            _ => ESC_SEQ_COLOR_WHITE,
+            Highlight::Keyword => ESC_SEQ_COLOR_YELLOW,
+            Highlight::Type => ESC_SEQ_COLOR_GREEN,
         }
     }
 }
@@ -346,6 +373,42 @@ fn editor_update_syntax(row: &mut Row, syntax: Option<&Syntax>) {
                 || (c == '.' && prev_hl == Highlight::Number))
         {
             row.highlights[idx] = Highlight::Number;
+            prev_sep = false;
+            continue;
+        }
+
+        if prev_sep {
+            let mut found_symbol = false;
+
+            for (hl, list) in [
+                (Highlight::Keyword, syntax.keywords),
+                (Highlight::Type, syntax.types),
+            ] {
+                for symbol in list {
+                    let symbol = symbol.chars().collect::<Vec<_>>();
+                    if row.render[idx..].starts_with(&symbol)
+                        && is_separator(
+                            *row.render
+                                .get(idx + symbol.len())
+                                .unwrap_or(&'\0'),
+                        )
+                    {
+                        row.highlights[idx..idx + symbol.len()].fill(hl);
+
+                        for _ in 0..symbol.len() - 1 {
+                            iter.next();
+                        }
+
+                        found_symbol = true;
+                        break;
+                    }
+                }
+            }
+
+            if found_symbol {
+                prev_sep = false;
+                continue;
+            }
         }
 
         prev_sep = is_separator(c);
