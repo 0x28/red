@@ -1010,7 +1010,7 @@ fn editor_draw_rows(
         } else {
             // NOTE: Ensure that only the first screen_cols glyphs of the
             // line are printed!
-            let mut prev_color = None;
+            let mut prev_color: Option<&Highlight> = None;
             for (c, hl) in config.rows[filerow]
                 .render
                 .iter()
@@ -1018,12 +1018,27 @@ fn editor_draw_rows(
                 .skip(config.col_offset)
                 .take(config.screen_cols)
             {
-                let current_color = Some(hl);
-                if prev_color != current_color {
-                    dest.write_all(hl.color())?;
-                    prev_color = current_color;
+                if c.is_ascii_control() {
+                    let char_code = *c as u8;
+                    let sym = if char_code <= 26 {
+                        b'@' + char_code
+                    } else {
+                        b'?'
+                    };
+                    dest.write_all(ESC_SEQ_INVERT_COLORS)?;
+                    dest.write_all(&[sym])?;
+                    dest.write_all(ESC_SEQ_RESET_ALL)?;
+                    if let Some(prev_hl) = prev_color {
+                        dest.write_all(prev_hl.color())?;
+                    }
+                } else {
+                    let current_color = Some(hl);
+                    if prev_color != current_color {
+                        dest.write_all(hl.color())?;
+                        prev_color = current_color;
+                    }
+                    dest.write_all(&c.to_string().into_bytes())?;
                 }
-                dest.write_all(&c.to_string().into_bytes())?;
             }
             dest.write_all(ESC_SEQ_COLOR_DEFAULT)?;
         }
