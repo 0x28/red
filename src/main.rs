@@ -59,7 +59,7 @@ const RED_STATUS_HEIGHT: usize = 2;
 
 macro_rules! editor_set_status_message {
     ($config: expr, $($arg:tt)*) => {
-	editor_set_status_message($config, format!($($arg)*));
+        editor_set_status_message($config, format!($($arg)*));
     };
 }
 
