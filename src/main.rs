@@ -106,9 +106,11 @@ impl SearchDirection {
 }
 
 struct Row {
+    index: usize,
     line: Vec<char>,
     render: Vec<char>,
     highlights: Vec<Highlight>,
+    in_comment: bool,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -190,18 +192,14 @@ impl Highlight {
 }
 
 impl Row {
-    fn empty() -> Row {
+    fn empty(at: usize) -> Row {
         Row {
+            index: at,
             line: vec![],
             render: vec![],
             highlights: vec![],
+            in_comment: false,
         }
-    }
-}
-
-impl Default for Row {
-    fn default() -> Self {
-        Row::empty()
     }
 }
 
@@ -322,8 +320,10 @@ fn is_separator(c: char) -> bool {
     c.is_whitespace() || c == '\0' || ",.()+-/*=~%<>[];".contains(c)
 }
 
-fn editor_update_syntax(row: usize, config: &mut EditorConfig) {
-    let row = &mut config.rows[row];
+fn editor_update_syntax(row_idx: usize, config: &mut EditorConfig) {
+    let mut in_comment = row_idx > 0 && config.rows[row_idx - 1].in_comment;
+    let num_rows = config.rows.len();
+    let row = &mut config.rows[row_idx];
 
     row.highlights.resize(row.render.len(), Highlight::Normal);
     row.highlights.fill(Highlight::Normal);
@@ -335,13 +335,12 @@ fn editor_update_syntax(row: usize, config: &mut EditorConfig) {
 
     let mut prev_sep = true;
     let mut in_string = None;
-    let mut in_comment = false;
 
     let single_line_comment =
         syntax.single_line_comment.chars().collect::<Vec<_>>();
     let multi_line_comment = (
         syntax.multi_line_comment.0.chars().collect::<Vec<_>>(),
-        syntax.multi_line_comment.0.chars().collect::<Vec<_>>(),
+        syntax.multi_line_comment.1.chars().collect::<Vec<_>>(),
     );
 
     let mut iter = row.render.iter().enumerate();
@@ -458,6 +457,12 @@ fn editor_update_syntax(row: usize, config: &mut EditorConfig) {
 
         prev_sep = is_separator(c);
     }
+
+    let in_comment_changed = row.in_comment != in_comment;
+    row.in_comment = in_comment;
+    if in_comment_changed && row.index + 1 < num_rows {
+        editor_update_syntax(row.index + 1, config);
+    }
 }
 
 fn editor_select_syntax_highlight(config: &mut EditorConfig) {
@@ -529,6 +534,10 @@ fn editor_delete_row(config: &mut EditorConfig, at: usize) {
         config.rows.remove(at);
         config.dirty = true;
     }
+
+    for idx in at..config.rows.len() {
+        config.rows[idx].index = idx;
+    }
 }
 
 fn editor_row_insert_char(
@@ -560,7 +569,7 @@ fn editor_row_delete_char(
 
 fn editor_insert_char(config: &mut EditorConfig, c: char) {
     if config.cursor_y == config.rows.len() {
-        config.rows.push(Row::empty())
+        config.rows.push(Row::empty(config.cursor_y))
     }
 
     editor_row_insert_char(config.cursor_y, config.cursor_x, c, config);
@@ -571,18 +580,26 @@ fn editor_insert_char(config: &mut EditorConfig, c: char) {
 
 fn editor_insert_newline(config: &mut EditorConfig) {
     if config.cursor_x == 0 {
-        config.rows.insert(config.cursor_y, Row::empty());
+        config
+            .rows
+            .insert(config.cursor_y, Row::empty(config.cursor_y));
     } else if let Some(current_row) = config.rows.get_mut(config.cursor_y) {
         let next_line = current_row.line[config.cursor_x..].to_vec();
         let next_row = Row {
+            index: config.cursor_y + 1,
             line: next_line,
             render: vec![],
             highlights: vec![],
+            in_comment: current_row.in_comment,
         };
         current_row.line.truncate(config.cursor_x);
         config.rows.insert(config.cursor_y + 1, next_row);
         editor_update_row(config.cursor_y, config);
         editor_update_row(config.cursor_y + 1, config);
+    }
+
+    for idx in config.cursor_y + 1..config.rows.len() {
+        config.rows[idx].index = idx;
     }
 
     config.cursor_y += 1;
@@ -768,15 +785,17 @@ fn editor_open(
     let file = File::open(file_path)?;
     let reader = BufReader::new(file);
 
-    for line in reader.lines() {
+    for (index, line) in reader.lines().enumerate() {
         let line = line?
             .trim_end_matches(|c| c == '\n' || c == '\r')
             .chars()
             .collect();
         let row = Row {
+            index,
             line,
             render: vec![],
             highlights: vec![],
+            in_comment: false,
         };
         config.rows.push(row);
         editor_update_row(config.rows.len() - 1, config);
