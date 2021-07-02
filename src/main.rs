@@ -115,6 +115,7 @@ struct Row {
 enum Highlight {
     Normal,
     Comment,
+    MultiLineComment,
     Keyword,
     Type,
     String,
@@ -129,6 +130,7 @@ struct Syntax {
     name: &'static str,
     extensions: &'static [&'static str],
     single_line_comment: &'static str,
+    multi_line_comment: (&'static str, &'static str),
     keywords: &'static [&'static str],
     types: &'static [&'static str],
     flags: u32,
@@ -139,6 +141,7 @@ const SYNTAXES: &[Syntax] = &[
         name: "c",
         extensions: &[".c", ".h", ".cpp"],
         single_line_comment: "//",
+        multi_line_comment: ("/*", "*/"),
         keywords: &[
             "switch", "if", "while", "for", "break", "continue", "return",
             "else", "struct", "union", "typedef", "static", "enum", "class",
@@ -154,6 +157,7 @@ const SYNTAXES: &[Syntax] = &[
         name: "rust",
         extensions: &[".rs"],
         single_line_comment: "//",
+        multi_line_comment: ("/*", "*/"),
         keywords: &[
             "as", "break", "const", "continue", "crate", "else", "enum",
             "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop",
@@ -178,6 +182,7 @@ impl Highlight {
             Highlight::Number => ESC_SEQ_COLOR_RED,
             Highlight::Match => ESC_SEQ_COLOR_BLUE,
             Highlight::Comment => ESC_SEQ_COLOR_CYAN,
+            Highlight::MultiLineComment => ESC_SEQ_COLOR_CYAN,
             Highlight::Keyword => ESC_SEQ_COLOR_YELLOW,
             Highlight::Type => ESC_SEQ_COLOR_GREEN,
         }
@@ -328,8 +333,14 @@ fn editor_update_syntax(row: &mut Row, syntax: Option<&Syntax>) {
 
     let mut prev_sep = true;
     let mut in_string = None;
+    let mut in_comment = false;
+
     let single_line_comment =
         syntax.single_line_comment.chars().collect::<Vec<_>>();
+    let multi_line_comment = (
+        syntax.multi_line_comment.0.chars().collect::<Vec<_>>(),
+        syntax.multi_line_comment.0.chars().collect::<Vec<_>>(),
+    );
 
     let mut iter = row.render.iter().enumerate();
 
@@ -341,11 +352,43 @@ fn editor_update_syntax(row: &mut Row, syntax: Option<&Syntax>) {
             .clone();
 
         if in_string.is_none()
+            && !in_comment
             && !single_line_comment.is_empty()
             && row.render[idx..].starts_with(&single_line_comment)
         {
             row.highlights[idx..].fill(Highlight::Comment);
             break;
+        }
+
+        if !multi_line_comment.0.is_empty()
+            && !multi_line_comment.1.is_empty()
+            && in_string.is_none()
+        {
+            if in_comment {
+                row.highlights[idx] = Highlight::MultiLineComment;
+                if row.render[idx..].starts_with(&multi_line_comment.1) {
+                    row.highlights[idx..idx + multi_line_comment.1.len()]
+                        .fill(Highlight::MultiLineComment);
+
+                    for _ in 0..multi_line_comment.1.len() - 1 {
+                        iter.next();
+                    }
+
+                    in_comment = false;
+                    prev_sep = true;
+                }
+                continue;
+            } else if row.render[idx..].starts_with(&multi_line_comment.0) {
+                row.highlights[idx..idx + multi_line_comment.0.len()]
+                    .fill(Highlight::MultiLineComment);
+
+                for _ in 0..multi_line_comment.0.len() - 1 {
+                    iter.next();
+                }
+
+                in_comment = true;
+                continue;
+            }
         }
 
         if syntax.flags & HIGHLIGHT_STRINGS != 0 {
