@@ -322,11 +322,13 @@ fn is_separator(c: char) -> bool {
     c.is_whitespace() || c == '\0' || ",.()+-/*=~%<>[];".contains(c)
 }
 
-fn editor_update_syntax(row: &mut Row, syntax: Option<&Syntax>) {
+fn editor_update_syntax(row: usize, config: &mut EditorConfig) {
+    let row = &mut config.rows[row];
+
     row.highlights.resize(row.render.len(), Highlight::Normal);
     row.highlights.fill(Highlight::Normal);
 
-    let syntax = match syntax {
+    let syntax = match config.syntax {
         Some(s) => s,
         None => return,
     };
@@ -476,8 +478,8 @@ fn editor_select_syntax_highlight(config: &mut EditorConfig) {
     });
 
     if config.syntax.is_some() {
-        for row in &mut config.rows {
-            editor_update_syntax(row, config.syntax);
+        for row in 0..config.rows.len() {
+            editor_update_syntax(row, config);
         }
     }
 }
@@ -495,12 +497,14 @@ fn editor_row_cursor_to_render(row: &Row, cursor_x: usize) -> usize {
     render_x
 }
 
-fn editor_row_append(row: &mut Row, content: &[char], syntax: Option<&Syntax>) {
-    row.line.extend_from_slice(content);
-    editor_update_row(row, syntax);
+fn editor_row_append(row: usize, content: &[char], config: &mut EditorConfig) {
+    config.rows[row].line.extend_from_slice(content);
+    editor_update_row(row, config);
 }
 
-fn editor_update_row(row: &mut Row, syntax: Option<&Syntax>) {
+fn editor_update_row(row_idx: usize, config: &mut EditorConfig) {
+    let row = &mut config.rows[row_idx];
+
     row.render.clear();
     let mut idx = 0;
     for &c in row.line.iter() {
@@ -517,7 +521,7 @@ fn editor_update_row(row: &mut Row, syntax: Option<&Syntax>) {
         }
     }
 
-    editor_update_syntax(row, syntax);
+    editor_update_syntax(row_idx, config);
 }
 
 fn editor_delete_row(config: &mut EditorConfig, at: usize) {
@@ -528,23 +532,29 @@ fn editor_delete_row(config: &mut EditorConfig, at: usize) {
 }
 
 fn editor_row_insert_char(
-    row: &mut Row,
+    row_idx: usize,
     mut at: usize,
     c: char,
-    syntax: Option<&Syntax>,
+    config: &mut EditorConfig,
 ) {
+    let row = &mut config.rows[row_idx];
     if at > row.line.len() {
         at = row.line.len();
     }
 
     row.line.insert(at, c);
-    editor_update_row(row, syntax);
+    editor_update_row(row_idx, config);
 }
 
-fn editor_row_delete_char(row: &mut Row, at: usize, syntax: Option<&Syntax>) {
+fn editor_row_delete_char(
+    row_idx: usize,
+    at: usize,
+    config: &mut EditorConfig,
+) {
+    let row = &mut config.rows[row_idx];
     if at < row.line.len() {
         row.line.remove(at);
-        editor_update_row(row, syntax);
+        editor_update_row(row_idx, config);
     }
 }
 
@@ -553,12 +563,7 @@ fn editor_insert_char(config: &mut EditorConfig, c: char) {
         config.rows.push(Row::empty())
     }
 
-    editor_row_insert_char(
-        &mut config.rows[config.cursor_y],
-        config.cursor_x,
-        c,
-        config.syntax,
-    );
+    editor_row_insert_char(config.cursor_y, config.cursor_x, c, config);
 
     config.cursor_x += 1;
     config.dirty = true;
@@ -569,15 +574,15 @@ fn editor_insert_newline(config: &mut EditorConfig) {
         config.rows.insert(config.cursor_y, Row::empty());
     } else if let Some(current_row) = config.rows.get_mut(config.cursor_y) {
         let next_line = current_row.line[config.cursor_x..].to_vec();
-        let mut next_row = Row {
+        let next_row = Row {
             line: next_line,
             render: vec![],
             highlights: vec![],
         };
         current_row.line.truncate(config.cursor_x);
-        editor_update_row(&mut next_row, config.syntax);
-        editor_update_row(current_row, config.syntax);
         config.rows.insert(config.cursor_y + 1, next_row);
+        editor_update_row(config.cursor_y, config);
+        editor_update_row(config.cursor_y + 1, config);
     }
 
     config.cursor_y += 1;
@@ -591,14 +596,18 @@ fn editor_delete_char(config: &mut EditorConfig) {
 
     if let Some(row) = config.rows.get_mut(config.cursor_y) {
         if config.cursor_x > 0 {
-            editor_row_delete_char(row, config.cursor_x - 1, config.syntax);
+            editor_row_delete_char(
+                config.cursor_y,
+                config.cursor_x - 1,
+                config,
+            );
             config.cursor_x -= 1;
             config.dirty = true;
         } else {
             let line = std::mem::take(&mut row.line);
             let prev_row = &mut config.rows[config.cursor_y - 1];
             config.cursor_x = prev_row.line.len();
-            editor_row_append(prev_row, &line, config.syntax);
+            editor_row_append(config.cursor_y - 1, &line, config);
             editor_delete_row(config, config.cursor_y);
             config.cursor_y -= 1;
         }
@@ -764,13 +773,13 @@ fn editor_open(
             .trim_end_matches(|c| c == '\n' || c == '\r')
             .chars()
             .collect();
-        let mut row = Row {
+        let row = Row {
             line,
             render: vec![],
             highlights: vec![],
         };
-        editor_update_row(&mut row, config.syntax);
         config.rows.push(row);
+        editor_update_row(config.rows.len() - 1, config);
     }
 
     config.file = Some(file_path.to_owned());
