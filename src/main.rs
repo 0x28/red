@@ -204,7 +204,7 @@ impl Row {
 }
 
 struct Editor {
-    original: Termios,
+    original_termios: Termios,
     cursor_x: usize,
     cursor_y: usize,
     render_x: usize,
@@ -227,7 +227,7 @@ struct Editor {
 
 impl Editor {
     fn new() -> Result<Editor, Box<dyn Error>> {
-        let original = Termios::from_fd(STDIN_FILENO)?;
+        let original_termios = Termios::from_fd(STDIN_FILENO)?;
         enable_raw_mode()?;
         let (rows, cols) = get_window_size()?;
 
@@ -238,7 +238,7 @@ impl Editor {
         )?;
 
         Ok(Editor {
-            original,
+            original_termios,
             cursor_x: 0,
             cursor_y: 0,
             render_x: 0,
@@ -265,7 +265,7 @@ impl Drop for Editor {
     fn drop(&mut self) {
         // NOTE: Don't panic while dropping!
         if let Err(e) =
-            termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, &self.original)
+            termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, &self.original_termios)
         {
             eprintln!("tcsetattr error: {}", e)
         }
