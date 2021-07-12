@@ -760,8 +760,15 @@ impl Editor {
     }
 
     fn open(&mut self, file_path: &Path) -> Result<(), Box<dyn Error>> {
-        let file = File::open(file_path)?;
-        let reader = BufReader::new(file);
+        let reader = match File::open(file_path) {
+            Ok(file) => BufReader::new(file),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                self.file = Some(file_path.to_owned());
+                self.select_syntax_highlight();
+                return Ok(())
+            }
+            Err(err) => return Err(Box::new(err)),
+        };
 
         for (index, line) in reader.lines().enumerate() {
             let line = line?
