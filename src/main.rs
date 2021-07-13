@@ -127,6 +127,7 @@ enum Highlight {
 
 const HIGHLIGHT_NUMBERS: u32 = 1 << 0;
 const HIGHLIGHT_STRINGS: u32 = 1 << 1;
+const HIGHLIGHT_CHARS: u32 = 1 << 2;
 
 struct Syntax {
     name: &'static str,
@@ -153,7 +154,7 @@ const SYNTAXES: &[Syntax] = &[
             "int", "long", "double", "float", "char", "unsigned", "signed",
             "void",
         ],
-        flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS,
+        flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS | HIGHLIGHT_CHARS,
     },
     Syntax {
         name: "rust",
@@ -171,7 +172,7 @@ const SYNTAXES: &[Syntax] = &[
             "bool", "char", "f32", "f64", "i128", "i16", "i32", "i64", "i8",
             "isize", "str", "u128", "u16", "u32", "u64", "u8", "usize",
         ],
-        flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS,
+        flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS | HIGHLIGHT_CHARS,
     },
 ];
 
@@ -389,6 +390,20 @@ impl Editor {
                     }
 
                     in_comment = true;
+                    continue;
+                }
+            }
+
+            if syntax.flags & HIGHLIGHT_CHARS != 0 && c == '\'' {
+                if idx >= 2 && row.line[idx - 2] == '\'' {
+                    row.highlights[idx - 2..=idx].fill(Highlight::String);
+                    continue;
+                }
+                if idx >= 3
+                    && row.line[idx - 3] == '\''
+                    && row.line[idx - 2] == '\\'
+                {
+                    row.highlights[idx - 3..=idx].fill(Highlight::String);
                     continue;
                 }
             }
@@ -765,7 +780,7 @@ impl Editor {
             Err(err) if err.kind() == io::ErrorKind::NotFound => {
                 self.file = Some(file_path.to_owned());
                 self.select_syntax_highlight();
-                return Ok(())
+                return Ok(());
             }
             Err(err) => return Err(Box::new(err)),
         };
