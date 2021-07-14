@@ -18,17 +18,17 @@ mod red_error;
 mod red_ioctl;
 use red_error::EditorError;
 
-const fn ctrl(c: char) -> u8 {
-    c as u8 & 0x1f
+const fn ctrl(c: char) -> char {
+    (c as u8 & 0x1f) as char
 }
 
-const CTRL_F: u8 = ctrl('f');
-const CTRL_H: u8 = ctrl('h');
-const CTRL_L: u8 = ctrl('l');
-const CTRL_Q: u8 = ctrl('q');
-const CTRL_S: u8 = ctrl('s');
-const ESC: u8 = b'\x1b';
-const BACKSPACE: u8 = b'\x7f';
+const CTRL_F: char = ctrl('f');
+const CTRL_H: char = ctrl('h');
+const CTRL_L: char = ctrl('l');
+const CTRL_Q: char = ctrl('q');
+const CTRL_S: char = ctrl('s');
+const ESC: char = '\x1b';
+const BACKSPACE: char = '\x7f';
 
 const ESC_SEQ_RESET_CURSOR: &[u8] = b"\x1b[H";
 const ESC_SEQ_CLEAR_SCREEN: &[u8] = b"\x1b[2J";
@@ -74,7 +74,7 @@ enum EditorKey {
     PageDown,
     Home,
     End,
-    Other(u8),
+    Other(char),
 }
 
 enum SearchDirection {
@@ -706,7 +706,7 @@ fn editor_find_callback(editor: &mut Editor, needle: &[char], key: EditorKey) {
     }
 
     match key {
-        EditorKey::Other(b'\r' | ESC) => {
+        EditorKey::Other('\r' | ESC) => {
             editor.last_match = None;
             editor.search_dir = SearchDirection::Forward;
             return;
@@ -820,12 +820,13 @@ impl Editor {
     }
 
     fn read_key(&mut self) -> Result<EditorKey, Box<dyn Error>> {
-        let mut c = [0; 1];
-        while io::stdin().read(&mut c)? != 1 {
+        let mut cbyte = [0; 1];
+        while io::stdin().read(&mut cbyte)? != 1 {
             self.maybe_update_screen()?;
         }
+        let c = cbyte[0] as char;
 
-        if c[0] == ESC {
+        if c == ESC {
             let mut seq = [0; 3];
             if io::stdin().read_exact(&mut seq[..2]).is_err() {
                 return Ok(EditorKey::Other(ESC));
@@ -857,7 +858,7 @@ impl Editor {
                 _ => Ok(EditorKey::Other(ESC)),
             }
         } else {
-            Ok(EditorKey::Other(c[0]))
+            Ok(EditorKey::Other(parse_utf8(cbyte[0], io::stdin())?))
         }
     }
 
@@ -888,12 +889,12 @@ impl Editor {
                     callback(self, &vec_input, key);
                     return Ok(None);
                 }
-                EditorKey::Other(b'\r') if !str_input.is_empty() => {
+                EditorKey::Other('\r') if !str_input.is_empty() => {
                     set_status_message!(self, "");
                     callback(self, &vec_input, key);
                     return Ok(Some(str_input));
                 }
-                EditorKey::Other(c) if !c.is_ascii_control() && c < 128 => {
+                EditorKey::Other(c) if !c.is_ascii_control() => {
                     str_input.push(c as char);
                     vec_input.push(c as char);
                 }
@@ -945,7 +946,7 @@ impl Editor {
     fn process_keypress(&mut self) -> Result<bool, Box<dyn Error>> {
         let key = self.read_key()?;
         match key {
-            EditorKey::Other(b'\r') => {
+            EditorKey::Other('\r') => {
                 self.insert_newline();
             }
             EditorKey::Other(CTRL_Q) => {
@@ -1015,6 +1016,47 @@ impl Editor {
         self.quit_times = RED_QUIT_TIMES;
         Ok(true)
     }
+}
+
+fn parse_utf8(
+    size_indicator: u8,
+    mut input_stream: impl Read,
+) -> Result<char, Box<dyn Error>> {
+    // NOTE: see https://en.wikipedia.org/wiki/UTF-8#Encoding
+    let first_byte = size_indicator as u32;
+    let maybe_char = if first_byte & 0x80 == 0 {
+        // one byte code point
+        Some(size_indicator as char)
+    } else if 0xE0 & first_byte == 0xC0 {
+        // two byte code point
+        let mut rest = [0; 1];
+        input_stream.read_exact(&mut rest)?;
+        char::from_u32((0x1F & first_byte) << 6 | (0x3F & rest[0] as u32))
+    } else if 0xF0 & first_byte == 0xE0 {
+        // three byte code point
+        let mut rest = [0; 2];
+        input_stream.read_exact(&mut rest)?;
+        char::from_u32(
+            (0x0F & first_byte) << 12
+                | (0x3F & rest[0] as u32) << 6
+                | (0x3F & rest[1] as u32),
+        )
+    } else if 0xF8 & first_byte == 0xF0 {
+        // four byte code point
+        let mut rest = [0; 3];
+        input_stream.read_exact(&mut rest)?;
+        char::from_u32(
+            (0x07 & first_byte) << 18
+                | (0x3F & rest[0] as u32) << 12
+                | (0x3F & rest[1] as u32) << 6
+                | (0x3F & rest[2] as u32),
+        )
+    } else {
+        None
+    };
+    maybe_char.ok_or_else(|| -> Box<dyn Error> {
+        Box::new(EditorError::InvalidUtf8Input)
+    })
 }
 
 fn clear_screen(dest: &mut impl Write) -> Result<(), Box<dyn Error>> {
