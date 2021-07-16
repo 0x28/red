@@ -56,6 +56,7 @@ const RED_VERSION: &str = env!("CARGO_PKG_VERSION");
 const RED_TAB_STOP: usize = 8;
 const RED_QUIT_TIMES: u8 = 3;
 const RED_STATUS_HEIGHT: usize = 2;
+const RED_LINE_SEP: &str = "│ ";
 
 macro_rules! set_status_message {
     ($editor: expr, $($arg:tt)*) => {
@@ -211,6 +212,7 @@ struct Editor {
     render_x: usize,
     screen_rows: usize,
     screen_cols: usize,
+    editor_cols: usize,
     row_offset: usize,
     col_offset: usize,
     rows: Vec<Row>,
@@ -245,6 +247,7 @@ impl Editor {
             render_x: 0,
             screen_rows: rows - RED_STATUS_HEIGHT,
             screen_cols: cols,
+            editor_cols: cols,
             row_offset: 0,
             col_offset: 0,
             rows: vec![],
@@ -1068,6 +1071,15 @@ fn clear_screen(dest: &mut impl Write) -> Result<(), Box<dyn Error>> {
 }
 
 impl Editor {
+    fn line_number_sep_len() -> usize {
+        RED_LINE_SEP.chars().count()
+    }
+
+    fn line_number_space(&self) -> usize {
+        format!("{}", self.screen_rows + self.row_offset).len()
+            + Editor::line_number_sep_len()
+    }
+
     fn scroll(&mut self) {
         self.render_x = 0;
         if let Some(row) = self.rows.get(self.cursor_y) {
@@ -1080,25 +1092,29 @@ impl Editor {
         if self.cursor_y >= self.row_offset + self.screen_rows {
             self.row_offset = self.cursor_y - self.screen_rows + 1;
         }
+
+        self.editor_cols = self.screen_cols - self.line_number_space();
+
         if self.render_x < self.col_offset {
             self.col_offset = self.render_x;
         }
-        if self.render_x >= self.col_offset + self.screen_cols {
-            self.col_offset = self.render_x - self.screen_cols + 1;
+        if self.render_x >= self.col_offset + self.editor_cols {
+            self.col_offset = self.render_x - self.editor_cols + 1;
         }
     }
 
     fn draw_rows(&self, dest: &mut impl Write) -> Result<(), Box<dyn Error>> {
+        let left_padding = self.line_number_space();
         for y in 0..self.screen_rows {
             let filerow = y + self.row_offset;
             if filerow >= self.rows.len() {
                 if self.rows.is_empty() && y == self.screen_rows / 3 {
                     let mut welcome_msg =
                         format!("red editor -- version {}", RED_VERSION);
-                    welcome_msg.truncate(self.screen_cols);
+                    welcome_msg.truncate(self.editor_cols);
 
                     let mut padding =
-                        (self.screen_cols - welcome_msg.len()) / 2;
+                        (self.editor_cols - welcome_msg.len()) / 2;
                     if padding > 0 {
                         dest.write_all(b"~")?;
                         padding -= 1;
@@ -1117,12 +1133,22 @@ impl Editor {
                 // NOTE: Ensure that only the first screen_cols glyphs of the
                 // line are printed!
                 let mut prev_color: Option<&Highlight> = None;
+                dest.write_all(
+                    format!(
+                        "{:>width$}{sep}",
+                        filerow + 1,
+                        width = left_padding - Editor::line_number_sep_len(),
+                        sep = RED_LINE_SEP
+                    )
+                    .as_bytes(),
+                )?;
+
                 for (c, hl) in self.rows[filerow]
                     .render
                     .iter()
                     .zip(self.rows[filerow].highlights.iter())
                     .skip(self.col_offset)
-                    .take(self.screen_cols)
+                    .take(self.editor_cols)
                 {
                     if c.is_ascii_control() {
                         let char_code = *c as u8;
@@ -1203,7 +1229,7 @@ impl Editor {
     ) -> Result<(), Box<dyn Error>> {
         dest.write_all(ESC_SEQ_CLEAR_LINE)?;
         let mut msg = self.status_msg.clone();
-        msg.truncate(self.screen_cols);
+        msg.truncate(self.editor_cols);
         let now = SystemTime::now();
 
         if !msg.is_empty()
@@ -1230,7 +1256,7 @@ impl Editor {
 
         buffer.write_all(&esc_seq_move_cursor(
             (self.cursor_y - self.row_offset) + 1,
-            (self.render_x - self.col_offset) + 1,
+            (self.render_x - self.col_offset) + 1 + self.line_number_space(),
         ))?;
 
         buffer.write_all(ESC_SEQ_SHOW_CURSOR)?;
