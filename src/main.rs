@@ -1087,15 +1087,21 @@ impl Editor {
                 // NOTE: Ensure that only the first screen_cols glyphs of the
                 // line are printed!
                 let mut prev_color: Option<&Highlight> = None;
+                if filerow == self.cursor_y {
+                    dest.write_all(ESC_SEQ_INVERT_COLORS)?;
+                }
                 dest.write_all(
                     format!(
-                        "{:>width$}{sep}",
+                        "{:>width$}",
                         filerow + 1,
                         width = left_padding - Editor::line_number_sep_len(),
-                        sep = RED_LINE_SEP
                     )
                     .as_bytes(),
                 )?;
+                if filerow == self.cursor_y {
+                    dest.write_all(ESC_SEQ_RESET_ALL)?;
+                }
+                dest.write_all(RED_LINE_SEP.as_bytes())?;
 
                 for (c, hl) in self.rows[filerow]
                     .render
