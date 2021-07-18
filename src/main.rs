@@ -1049,11 +1049,11 @@ impl Editor {
 
         self.editor_cols = self.screen_cols - self.line_number_space();
 
-        if self.render_x < self.col_offset {
-            self.col_offset = self.render_x;
-        }
         if self.render_x >= self.col_offset + self.editor_cols {
             self.col_offset = self.render_x - self.editor_cols + 1;
+        }
+        if self.render_x < self.col_offset {
+            self.col_offset = self.render_x;
         }
     }
 
