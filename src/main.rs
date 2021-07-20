@@ -378,7 +378,7 @@ impl Editor {
                     }
                     prev_sep = true;
                     continue;
-                } else if c == '"' {
+                } else if syntax.string_delimiter.contains(c) {
                     in_string = Some(c);
                     row.highlights[idx] = Highlight::String;
                     continue;

@@ -5,6 +5,7 @@ pub struct Syntax {
     pub multi_line_comment: (&'static str, &'static str),
     pub keywords: &'static [&'static str],
     pub types: &'static [&'static str],
+    pub string_delimiter: &'static str,
     pub flags: u32,
 }
 
@@ -27,6 +28,7 @@ pub const SYNTAXES: &[Syntax] = &[
             "int", "long", "double", "float", "char", "unsigned", "signed",
             "void",
         ],
+        string_delimiter: "\"",
         flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS | HIGHLIGHT_CHARS,
     },
     Syntax {
@@ -45,6 +47,7 @@ pub const SYNTAXES: &[Syntax] = &[
             "bool", "char", "f32", "f64", "i128", "i16", "i32", "i64", "i8",
             "isize", "str", "u128", "u16", "u32", "u64", "u8", "usize",
         ],
+        string_delimiter: "\"",
         flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS | HIGHLIGHT_CHARS,
     },
     Syntax {
@@ -115,6 +118,23 @@ pub const SYNTAXES: &[Syntax] = &[
             "RealFrac",
             "String",
         ],
+        string_delimiter: "\"",
         flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS | HIGHLIGHT_CHARS,
+    },
+    Syntax {
+        name: "python",
+        extensions: &[".py"],
+        single_line_comment: "#",
+        multi_line_comment: ("", ""),
+        keywords: &[
+            "False", "None", "True", "and", "as", "assert", "async", "await",
+            "break", "class", "continue", "def", "del", "elif", "else",
+            "except", "finally", "for", "from", "global", "if", "import", "in",
+            "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
+            "try", "while", "with", "yield",
+        ],
+        types: &["int", "float", "bool", "str", "bytes", "object"],
+        string_delimiter: "\"'",
+        flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS,
     },
 ];
