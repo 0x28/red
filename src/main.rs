@@ -23,15 +23,6 @@ use languages::{
 use red_error::EditorError;
 use red_ioctl::get_window_size_ioctl;
 
-const fn ctrl(c: char) -> char {
-    (c as u8 & 0x1f) as char
-}
-
-const CTRL_F: char = ctrl('f');
-const CTRL_H: char = ctrl('h');
-const CTRL_L: char = ctrl('l');
-const CTRL_Q: char = ctrl('q');
-const CTRL_S: char = ctrl('s');
 const ESC: char = '\x1b';
 const BACKSPACE: char = '\x7f';
 
@@ -80,6 +71,8 @@ enum EditorKey {
     PageDown,
     Home,
     End,
+    Ctrl(char),
+    Meta(char),
     Other(char),
 }
 
@@ -663,14 +656,12 @@ fn editor_find_callback(editor: &mut Editor, needle: &[char], key: EditorKey) {
     }
 
     match key {
-        EditorKey::Other('\r' | ESC) => {
+        EditorKey::Ctrl('m') | EditorKey::Other(ESC) => {
             editor.last_match = None;
             editor.search_dir = SearchDirection::Forward;
             return;
         }
-        EditorKey::ArrowRight
-        | EditorKey::ArrowDown
-        | EditorKey::Other(CTRL_F) => {
+        EditorKey::ArrowRight | EditorKey::ArrowDown | EditorKey::Ctrl('f') => {
             editor.search_dir = SearchDirection::Forward;
         }
         EditorKey::ArrowLeft | EditorKey::ArrowUp => {
@@ -785,8 +776,14 @@ impl Editor {
 
         if c == ESC {
             let mut seq = [0; 3];
-            if io::stdin().read_exact(&mut seq[..2]).is_err() {
+
+            if io::stdin().read_exact(&mut seq[..1]).is_err() {
                 return Ok(EditorKey::Other(ESC));
+            }
+
+            if seq[0] != b'[' || io::stdin().read_exact(&mut seq[1..2]).is_err()
+            {
+                return Ok(EditorKey::Meta(seq[0] as char));
             }
 
             match &seq[..2] {
@@ -815,7 +812,12 @@ impl Editor {
                 _ => Ok(EditorKey::Other(ESC)),
             }
         } else {
-            Ok(EditorKey::Other(parse_utf8(cbyte[0], io::stdin())?))
+            let key = parse_utf8(cbyte[0], io::stdin())?;
+            if key.is_ascii_control() && (1..=26).contains(&(key as u8)) {
+                Ok(EditorKey::Ctrl((key as u8 + 0x60) as char))
+            } else {
+                Ok(EditorKey::Other(key))
+            }
         }
     }
 
@@ -837,7 +839,9 @@ impl Editor {
 
             let key = self.read_key()?;
             match key {
-                EditorKey::Delete | EditorKey::Other(BACKSPACE | CTRL_H) => {
+                EditorKey::Delete
+                | EditorKey::Other(BACKSPACE)
+                | EditorKey::Ctrl('h') => {
                     str_input.pop();
                     vec_input.pop();
                 }
@@ -846,7 +850,7 @@ impl Editor {
                     callback(self, &vec_input, key);
                     return Ok(None);
                 }
-                EditorKey::Other('\r') if !str_input.is_empty() => {
+                EditorKey::Ctrl('m') if !str_input.is_empty() => {
                     set_status_message!(self, "");
                     callback(self, &vec_input, key);
                     return Ok(Some(str_input));
@@ -903,10 +907,10 @@ impl Editor {
     fn process_keypress(&mut self) -> Result<bool, Box<dyn Error>> {
         let key = self.read_key()?;
         match key {
-            EditorKey::Other('\r') => {
+            EditorKey::Ctrl('m') => {
                 self.insert_newline();
             }
-            EditorKey::Other(CTRL_Q) => {
+            EditorKey::Ctrl('q') => {
                 if self.dirty && self.quit_times > 0 {
                     set_status_message!(
                         self,
@@ -921,7 +925,7 @@ impl Editor {
                     return Ok(false);
                 }
             }
-            EditorKey::Other(CTRL_S) => {
+            EditorKey::Ctrl('s') => {
                 self.save()?;
             }
             EditorKey::Home => {
@@ -932,8 +936,10 @@ impl Editor {
                     self.cursor_x = row.line.len();
                 }
             }
-            EditorKey::Other(CTRL_F) => self.find()?,
-            EditorKey::Delete | EditorKey::Other(BACKSPACE | CTRL_H) => {
+            EditorKey::Ctrl('f') => self.find()?,
+            EditorKey::Delete
+            | EditorKey::Other(BACKSPACE)
+            | EditorKey::Ctrl('h') => {
                 if key == EditorKey::Delete {
                     self.move_cursor(EditorKey::ArrowRight);
                 }
@@ -964,7 +970,13 @@ impl Editor {
             | EditorKey::ArrowDown => {
                 self.move_cursor(key);
             }
-            EditorKey::Other(ESC | CTRL_L) => (),
+            EditorKey::Other(ESC) | EditorKey::Ctrl('l') => (),
+            EditorKey::Meta(c) => {
+                set_status_message!(self, "M-{} isn't bound!", c);
+            }
+            EditorKey::Ctrl(c) => {
+                set_status_message!(self, "C-{} isn't bound!", c);
+            }
             EditorKey::Other(byte) => {
                 self.insert_char(byte as char);
             }
