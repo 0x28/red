@@ -565,6 +565,7 @@ impl Editor {
             self.rows[idx].index = idx;
         }
 
+        self.dirty = true;
         self.cursor_y += 1;
         self.cursor_x = 0;
     }
