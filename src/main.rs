@@ -23,6 +23,8 @@ use languages::{
 use red_error::EditorError;
 use red_ioctl::get_window_size_ioctl;
 
+type Position = (usize, usize);
+
 const ESC: char = '\x1b';
 const BACKSPACE: char = '\x7f';
 
@@ -43,7 +45,9 @@ const ESC_SEQ_COLOR_MAGENTA: &[u8] = b"\x1b[35m";
 const ESC_SEQ_COLOR_CYAN: &[u8] = b"\x1b[36m";
 // const ESC_SEQ_COLOR_WHITE: &[u8] = b"\x1b[37m";
 const ESC_SEQ_COLOR_DEFAULT: &[u8] = b"\x1b[39m";
+const ESC_SEQ_COLOR_DEFAULT_BG: &[u8] = b"\x1b[49m";
 const ESC_SEQ_COLOR_BRIGHT_CYAN: &[u8] = b"\x1b[96m";
+const ESC_SEQ_COLOR_GRAY_BG: &[u8] = b"\x1b[100m";
 
 fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
     format!("\x1b[{};{}H", pos_y, pos_x).into_bytes()
@@ -176,6 +180,7 @@ struct Editor {
     win_changed: Arc<AtomicBool>,
     stored_hl: Option<(usize, Vec<Highlight>)>,
     syntax: Option<&'static Syntax>,
+    mark: Option<Position>,
 }
 
 impl Editor {
@@ -211,6 +216,7 @@ impl Editor {
             win_changed,
             stored_hl: None,
             syntax: None,
+            mark: None,
         })
     }
 }
@@ -820,10 +826,12 @@ impl Editor {
             }
         } else {
             let key = parse_utf8(cbyte[0], io::stdin())?;
-            if key.is_ascii_control() && (1..=26).contains(&(key as u8)) {
-                Ok(EditorKey::Ctrl((key as u8 + 0x60) as char))
-            } else {
-                Ok(EditorKey::Other(key))
+            match key {
+                '\0' => Ok(EditorKey::Ctrl(' ')),
+                '\x01'..='\x1a' => {
+                    Ok(EditorKey::Ctrl((key as u8 + 0x60) as char))
+                }
+                _ => Ok(EditorKey::Other(key)),
             }
         }
     }
@@ -978,6 +986,14 @@ impl Editor {
                 self.move_cursor(key);
             }
             EditorKey::Other(ESC) | EditorKey::Ctrl('l') => (),
+            EditorKey::Ctrl(' ') => {
+                if let Some(row) = self.rows.get(self.cursor_y) {
+                    self.mark = Some((
+                        editor_row_cursor_to_render(row, self.cursor_x),
+                        self.cursor_y,
+                    ));
+                }
+            }
             EditorKey::Meta(c) => {
                 set_status_message!(self, "M-{} isn't bound!", c);
             }
@@ -1076,6 +1092,12 @@ impl Editor {
         }
     }
 
+    fn position_less(pos1: &(usize, usize), pos2: &(usize, usize)) -> bool {
+        let ((x1, y1), (x2, y2)) = (pos1, pos2);
+
+        y1 < y2 || y1 == y2 && x1 < x2
+    }
+
     fn draw_rows(&self, dest: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let left_padding = self.line_number_space();
         for y in 0..self.screen_rows {
@@ -1122,13 +1144,29 @@ impl Editor {
                 }
                 dest.write_all(RED_LINE_SEP.as_bytes())?;
 
-                for (c, hl) in self.rows[filerow]
+                let selection = self.selection();
+
+                for ((column, c), hl) in self.rows[filerow]
                     .render
                     .iter()
+                    .enumerate()
                     .zip(self.rows[filerow].highlights.iter())
                     .skip(self.col_offset)
                     .take(self.editor_cols)
                 {
+                    if let Some(((begin_x, begin_y), (end_x, end_y))) =
+                        selection
+                    {
+                        if end_x <= column && end_y == filerow
+                            || end_y < filerow
+                        {
+                            dest.write_all(ESC_SEQ_COLOR_DEFAULT_BG)?;
+                        } else if column >= begin_x && filerow == begin_y
+                            || filerow > begin_y
+                        {
+                            dest.write_all(ESC_SEQ_COLOR_GRAY_BG)?;
+                        }
+                    }
                     if c.is_ascii_control() {
                         let char_code = *c as u8;
                         let sym = if char_code <= 26 {
@@ -1152,12 +1190,27 @@ impl Editor {
                     }
                 }
                 dest.write_all(ESC_SEQ_COLOR_DEFAULT)?;
+                dest.write_all(ESC_SEQ_COLOR_DEFAULT_BG)?;
             }
             dest.write_all(ESC_SEQ_CLEAR_LINE)?;
             dest.write_all(b"\r\n")?;
         }
 
         Ok(())
+    }
+
+    fn selection(&self) -> Option<(Position, Position)> {
+        match self.mark {
+            Some(mark) => {
+                let cursor_pos = (self.cursor_x, self.cursor_y);
+                if Editor::position_less(&mark, &cursor_pos) {
+                    Some((mark, cursor_pos))
+                } else {
+                    Some((cursor_pos, mark))
+                }
+            }
+            None => None,
+        }
     }
 
     fn draw_status_bar(
