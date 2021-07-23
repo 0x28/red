@@ -620,7 +620,9 @@ impl Editor {
                 }
             }
         }
-        self.select_syntax_highlight();
+        if self.syntax.is_none() {
+            self.select_syntax_highlight();
+        }
 
         self.dirty = false;
         let mut write_to_file = || -> Result<(), Box<dyn Error>> {
