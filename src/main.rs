@@ -43,6 +43,7 @@ const ESC_SEQ_COLOR_MAGENTA: &[u8] = b"\x1b[35m";
 const ESC_SEQ_COLOR_CYAN: &[u8] = b"\x1b[36m";
 // const ESC_SEQ_COLOR_WHITE: &[u8] = b"\x1b[37m";
 const ESC_SEQ_COLOR_DEFAULT: &[u8] = b"\x1b[39m";
+const ESC_SEQ_COLOR_BRIGHT_CYAN: &[u8] = b"\x1b[96m";
 
 fn esc_seq_move_cursor(pos_y: usize, pos_x: usize) -> Vec<u8> {
     format!("\x1b[{};{}H", pos_y, pos_x).into_bytes()
@@ -119,6 +120,7 @@ enum Highlight {
     MultiLineComment,
     Keyword,
     Type,
+    Builtin,
     String,
     Number,
     Match,
@@ -136,6 +138,7 @@ impl Highlight {
             Highlight::MultiLineComment => ESC_SEQ_COLOR_CYAN,
             Highlight::Keyword => ESC_SEQ_COLOR_YELLOW,
             Highlight::Type => ESC_SEQ_COLOR_GREEN,
+            Highlight::Builtin => ESC_SEQ_COLOR_BRIGHT_CYAN,
         }
     }
 }
@@ -394,6 +397,7 @@ impl Editor {
                 for (hl, list) in [
                     (Highlight::Keyword, syntax.keywords),
                     (Highlight::Type, syntax.types),
+                    (Highlight::Builtin, syntax.builtins),
                 ] {
                     for symbol in list {
                         let symbol = symbol.chars().collect::<Vec<_>>();
