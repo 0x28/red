@@ -512,12 +512,17 @@ impl Editor {
     fn delete_row(&mut self, at: usize) {
         if at < self.rows.len() {
             self.rows.remove(at);
-            self.dirty = true;
+            self.mark_dirty();
         }
 
         for idx in at..self.rows.len() {
             self.rows[idx].index = idx;
         }
+    }
+
+    fn mark_dirty(&mut self) {
+        self.mark = None;
+        self.dirty = true;
     }
 
     fn row_insert_char(&mut self, row_idx: usize, mut at: usize, c: char) {
@@ -546,7 +551,7 @@ impl Editor {
         self.row_insert_char(self.cursor_y, self.cursor_x, c);
 
         self.cursor_x += 1;
-        self.dirty = true;
+        self.mark_dirty();
     }
 
     fn insert_newline(&mut self) {
@@ -571,7 +576,7 @@ impl Editor {
             self.rows[idx].index = idx;
         }
 
-        self.dirty = true;
+        self.mark_dirty();
         self.cursor_y += 1;
         self.cursor_x = 0;
     }
@@ -585,7 +590,7 @@ impl Editor {
             if self.cursor_x > 0 {
                 self.row_delete_char(self.cursor_y, self.cursor_x - 1);
                 self.cursor_x -= 1;
-                self.dirty = true;
+                self.mark_dirty();
             } else {
                 let line = std::mem::take(&mut row.line);
                 let prev_row = &mut self.rows[self.cursor_y - 1];
@@ -919,6 +924,15 @@ impl Editor {
         }
     }
 
+    fn delete_range(&mut self, (begin, end): (Position, Position)) {
+        self.cursor_x = end.0;
+        self.cursor_y = end.1;
+
+        while (self.cursor_x, self.cursor_y) != begin {
+            self.delete_char();
+        }
+    }
+
     fn process_keypress(&mut self) -> Result<bool, Box<dyn Error>> {
         let key = self.read_key()?;
         match key {
@@ -955,10 +969,14 @@ impl Editor {
             EditorKey::Delete
             | EditorKey::Other(BACKSPACE)
             | EditorKey::Ctrl('h') => {
-                if key == EditorKey::Delete {
-                    self.move_cursor(EditorKey::ArrowRight);
+                if let Some(selection) = self.selection() {
+                    self.delete_range(selection);
+                } else {
+                    if key == EditorKey::Delete {
+                        self.move_cursor(EditorKey::ArrowRight);
+                    }
+                    self.delete_char();
                 }
-                self.delete_char();
             }
             EditorKey::PageUp | EditorKey::PageDown => {
                 if key == EditorKey::PageUp {
@@ -1339,7 +1357,7 @@ fn main() {
 
     set_status_message!(
         &mut editor,
-        "HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find"
+        "HELP: C-s = save | C-q = quit | C-f = find | C-SPC = select"
     );
 
     if let Err(e) = editor.run() {
