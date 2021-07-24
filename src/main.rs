@@ -181,6 +181,7 @@ struct Editor {
     stored_hl: Option<(usize, Vec<Highlight>)>,
     syntax: Option<&'static Syntax>,
     mark: Option<Position>,
+    clipboard: String,
 }
 
 impl Editor {
@@ -217,6 +218,7 @@ impl Editor {
             stored_hl: None,
             syntax: None,
             mark: None,
+            clipboard: String::new(),
         })
     }
 }
@@ -933,6 +935,40 @@ impl Editor {
         }
     }
 
+    fn copy_range(&mut self, (begin, end): (Position, Position)) {
+        let old_pos = (self.cursor_x, self.cursor_y);
+        self.cursor_x = begin.0;
+        self.cursor_y = begin.1;
+        let mut copy = String::new();
+
+        while (self.cursor_x, self.cursor_y) != end {
+            if let Some(row) = self.rows.get(self.cursor_y) {
+                if self.cursor_x >= row.line.len() {
+                    copy.push('\n')
+                } else {
+                    copy.push(row.line[self.cursor_x])
+                }
+            }
+            self.move_cursor(EditorKey::ArrowRight);
+        }
+
+        self.mark = None;
+        self.clipboard = copy;
+        self.cursor_x = old_pos.0;
+        self.cursor_y = old_pos.1;
+    }
+
+    fn paste(&mut self) {
+        let mut clipboard = std::mem::take(&mut self.clipboard);
+        for c in clipboard.chars() {
+            match c {
+                '\n' => self.insert_newline(),
+                _ => self.insert_char(c),
+            }
+        }
+        self.clipboard = std::mem::take(&mut clipboard);
+    }
+
     fn process_keypress(&mut self) -> Result<bool, Box<dyn Error>> {
         let key = self.read_key()?;
         match key {
@@ -1011,6 +1047,14 @@ impl Editor {
                         self.cursor_y,
                     ));
                 }
+            }
+            EditorKey::Ctrl('c') => {
+                if let Some(selection) = self.selection() {
+                    self.copy_range(selection);
+                }
+            }
+            EditorKey::Ctrl('v') => {
+                self.paste();
             }
             EditorKey::Meta(c) => {
                 set_status_message!(self, "M-{} isn't bound!", c);
