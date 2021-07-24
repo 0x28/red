@@ -944,7 +944,7 @@ impl Editor {
                     set_status_message!(
                         self,
                         "WARNING!!! File has unsaved changes. \
-                     Press Ctrl-Q {} more times to quit.",
+                     Press C-q {} more times to quit.",
                         self.quit_times
                     );
                     self.quit_times -= 1;
