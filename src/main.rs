@@ -356,13 +356,14 @@ impl Editor {
             }
 
             if syntax.flags & HIGHLIGHT_CHARS != 0 && c == '\'' {
-                if idx >= 2 && row.line[idx - 2] == '\'' {
+                let line_idx = editor_row_render_to_cursor(row, idx);
+                if line_idx >= 2 && row.line[line_idx - 2] == '\'' {
                     row.highlights[idx - 2..=idx].fill(Highlight::String);
                     continue;
                 }
-                if idx >= 3
-                    && row.line[idx - 3] == '\''
-                    && row.line[idx - 2] == '\\'
+                if line_idx >= 3
+                    && row.line[line_idx - 3] == '\''
+                    && row.line[line_idx - 2] == '\\'
                 {
                     row.highlights[idx - 3..=idx].fill(Highlight::String);
                     continue;
@@ -481,6 +482,24 @@ fn editor_row_cursor_to_render(row: &Row, cursor_x: usize) -> usize {
     }
 
     render_x
+}
+
+fn editor_row_render_to_cursor(row: &Row, render_x: usize) -> usize {
+    let mut current_render_x = 0;
+
+    for (cursor_x, &c) in row.line.iter().enumerate() {
+        if c == '\t' {
+            current_render_x +=
+                (RED_TAB_STOP - 1) - (current_render_x % RED_TAB_STOP);
+        }
+        current_render_x += 1;
+
+        if current_render_x > render_x {
+            return cursor_x;
+        }
+    }
+
+    row.line.len()
 }
 
 impl Editor {
@@ -1409,3 +1428,6 @@ fn main() {
         eprintln!("error: {}", e)
     }
 }
+
+#[cfg(test)]
+mod tests;
