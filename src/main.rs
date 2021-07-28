@@ -736,7 +736,9 @@ fn editor_find_callback(editor: &mut Editor, needle: &[char], key: EditorKey) {
             editor.row_offset = num_rows;
 
             editor.stored_hl = Some((search_idx, row.highlights.clone()));
-            row.highlights[idx..idx + needle.len()].fill(Highlight::Match);
+            let render_idx = editor_row_cursor_to_render(&row, idx);
+            row.highlights[render_idx..render_idx + needle.len()]
+                .fill(Highlight::Match);
             break;
         }
     }
