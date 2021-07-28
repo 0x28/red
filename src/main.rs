@@ -721,7 +721,6 @@ fn editor_find_callback(editor: &mut Editor, needle: &[char], key: EditorKey) {
     for _ in 0..editor.rows.len() {
         search_idx = editor.search_dir.step(search_idx, editor.rows.len() - 1);
 
-        let num_rows = editor.rows.len();
         let row = editor
             .rows
             .get_mut(search_idx)
@@ -733,7 +732,10 @@ fn editor_find_callback(editor: &mut Editor, needle: &[char], key: EditorKey) {
             editor.last_match = Some(search_idx);
             editor.cursor_y = search_idx;
             editor.cursor_x = idx;
-            editor.row_offset = num_rows;
+            let half_screen = editor.screen_rows / 2;
+            if half_screen < search_idx {
+                editor.row_offset = search_idx - half_screen;
+            }
 
             editor.stored_hl = Some((search_idx, row.highlights.clone()));
             let render_idx = editor_row_cursor_to_render(&row, idx);
