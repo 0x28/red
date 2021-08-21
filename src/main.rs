@@ -160,7 +160,7 @@ impl Row {
 }
 
 struct Editor {
-    original_termios: Termios,
+    original_termios: Option<Termios>,
     cursor_x: usize,
     cursor_y: usize,
     render_x: usize,
@@ -197,7 +197,7 @@ impl Editor {
         )?;
 
         Ok(Editor {
-            original_termios,
+            original_termios: Some(original_termios),
             cursor_x: 0,
             cursor_y: 0,
             render_x: 0,
@@ -226,10 +226,12 @@ impl Editor {
 impl Drop for Editor {
     fn drop(&mut self) {
         // NOTE: Don't panic while dropping!
-        if let Err(e) =
-            termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, &self.original_termios)
-        {
-            eprintln!("tcsetattr error: {}", e)
+        if let Some(terimos) = &self.original_termios {
+            if let Err(e) =
+                termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, terimos)
+            {
+                eprintln!("tcsetattr error: {}", e)
+            }
         }
     }
 }
