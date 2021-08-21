@@ -286,3 +286,7 @@ pub const SYNTAXES: &[Syntax] = &[
         flags: HIGHLIGHT_NUMBERS | HIGHLIGHT_STRINGS | HIGHLIGHT_CHARS,
     },
 ];
+
+
+#[cfg(test)]
+mod tests;
