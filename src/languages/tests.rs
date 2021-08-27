@@ -85,3 +85,25 @@ fn test_syntax_rust() {
         "kk_kkkkk_kkkkk_ttt_ttt_tt_ttt_ttttt",
     )
 }
+
+#[test]
+fn test_syntax_c() {
+    let mut editor = test_editor(&SYNTAXES[0]);
+
+    expect_highlight(&mut editor, "int main(void) {}", "ttt______tttt____");
+    expect_highlight(
+        &mut editor,
+        r#"char x[] = "hello world";"#,
+        r#"tttt_______sssssssssssss_"#,
+    );
+    expect_highlight(
+        &mut editor,
+        r#"while (1){ printf("test"); }"#,
+        r#"kkkkk__0__________ssssss____"#,
+    );
+    expect_highlight(
+        &mut editor,
+        "int x = 100 + 200 * 2.123 / (10 * sizeof(int))",
+        "ttt_____000___000___00000____00___kkkkkk_ttt__",
+    );
+}
