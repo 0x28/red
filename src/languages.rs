@@ -23,7 +23,7 @@ pub const SYNTAXES: &[Syntax] = &[
         keywords: &[
             "switch", "if", "while", "for", "break", "continue", "return",
             "else", "struct", "union", "typedef", "static", "enum", "class",
-            "case",
+            "case", "sizeof"
         ],
         types: &[
             "int", "long", "double", "float", "char", "unsigned", "signed",
