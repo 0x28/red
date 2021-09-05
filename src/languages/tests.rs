@@ -8,7 +8,7 @@ use crate::SearchDirection;
 use crate::RED_QUIT_TIMES;
 use crate::RED_STATUS_HEIGHT;
 
-use super::{Syntax, SYNTAX_C, SYNTAX_RUST};
+use super::{Syntax, SYNTAX_C, SYNTAX_HASKELL, SYNTAX_RUST};
 
 fn test_editor(syntax: &'static Syntax) -> Editor {
     Editor {
@@ -105,4 +105,23 @@ fn test_syntax_c() {
         "int x = 100 + 200 * 2.123 / (10 * sizeof(int))",
         "ttt_____000___000___00000____00___kkkkkk_ttt__",
     );
+}
+
+#[test]
+fn test_syntax_haskell() {
+    let mut editor = test_editor(&SYNTAX_HASKELL);
+
+    expect_highlight(
+        &mut editor,
+        "data Expr = Val Int | App Op Expr Expr",
+        "kkkk____________ttt___________________",
+    );
+
+    expect_highlight(&mut editor, "let x = (+) 2", "kkk_________0");
+
+    expect_highlight(
+        &mut editor,
+        "newtype Parser a = P (String -> [(a, String)])",
+        "kkkkkkk_______________tttttt_________tttttt___",
+    )
 }
