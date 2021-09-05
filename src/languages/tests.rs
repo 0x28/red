@@ -123,5 +123,11 @@ fn test_syntax_haskell() {
         &mut editor,
         "newtype Parser a = P (String -> [(a, String)])",
         "kkkkkkk_______________tttttt_________tttttt___",
-    )
+    );
+
+    expect_highlight(
+        &mut editor,
+        "100 * 200 + 300 {- this is a comment -} infix type where -- ...",
+        "000___000___000_CCCCCCCCCCCCCCCCCCCCCCC_kkkkk_kkkk_kkkkk_cccccc",
+    );
 }
