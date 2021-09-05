@@ -1,7 +1,6 @@
 use std::sync::{atomic::AtomicBool, Arc};
 use std::time::SystemTime;
 
-use crate::languages::SYNTAXES;
 use crate::Editor;
 use crate::Highlight;
 use crate::Row;
@@ -9,7 +8,7 @@ use crate::SearchDirection;
 use crate::RED_QUIT_TIMES;
 use crate::RED_STATUS_HEIGHT;
 
-use super::Syntax;
+use super::{Syntax, SYNTAX_C, SYNTAX_RUST};
 
 fn test_editor(syntax: &'static Syntax) -> Editor {
     Editor {
@@ -72,7 +71,7 @@ fn expect_highlight(editor: &mut Editor, line: &str, highlight: &str) {
 
 #[test]
 fn test_syntax_rust() {
-    let mut editor = test_editor(&SYNTAXES[1]);
+    let mut editor = test_editor(&SYNTAX_RUST);
 
     expect_highlight(&mut editor, "let x = 100;", "kkk_____000_");
     // TODO dots shouldn't be highlighted as numbers here
@@ -88,7 +87,7 @@ fn test_syntax_rust() {
 
 #[test]
 fn test_syntax_c() {
-    let mut editor = test_editor(&SYNTAXES[0]);
+    let mut editor = test_editor(&SYNTAX_C);
 
     expect_highlight(&mut editor, "int main(void) {}", "ttt______tttt____");
     expect_highlight(
