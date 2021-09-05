@@ -8,7 +8,7 @@ use crate::SearchDirection;
 use crate::RED_QUIT_TIMES;
 use crate::RED_STATUS_HEIGHT;
 
-use super::{Syntax, SYNTAX_C, SYNTAX_HASKELL, SYNTAX_RUST};
+use super::{Syntax, SYNTAX_C, SYNTAX_HASKELL, SYNTAX_PYTHON, SYNTAX_RUST};
 
 fn test_editor(syntax: &'static Syntax) -> Editor {
     Editor {
@@ -129,5 +129,24 @@ fn test_syntax_haskell() {
         &mut editor,
         "100 * 200 + 300 {- this is a comment -} infix type where -- ...",
         "000___000___000_CCCCCCCCCCCCCCCCCCCCCCC_kkkkk_kkkk_kkkkk_cccccc",
+    );
+}
+
+#[test]
+fn test_syntax_python() {
+    let mut editor = test_editor(&SYNTAX_PYTHON);
+
+    expect_highlight(&mut editor, "import math", "kkkkkk_____");
+
+    expect_highlight(
+        &mut editor,
+        "inc = lambda x: x + 1",
+        "______kkkkkk________0",
+    );
+
+    expect_highlight(
+        &mut editor,
+        "100 + 200 'hello world' # some comment",
+        "000___000_sssssssssssss_cccccccccccccc",
     );
 }
