@@ -8,7 +8,9 @@ use crate::SearchDirection;
 use crate::RED_QUIT_TIMES;
 use crate::RED_STATUS_HEIGHT;
 
-use super::{Syntax, SYNTAX_C, SYNTAX_HASKELL, SYNTAX_PYTHON, SYNTAX_RUST};
+use super::{
+    Syntax, SYNTAX_C, SYNTAX_HASKELL, SYNTAX_PYTHON, SYNTAX_RUST, SYNTAX_SHELL,
+};
 
 fn test_editor(syntax: &'static Syntax) -> Editor {
     Editor {
@@ -148,5 +150,28 @@ fn test_syntax_python() {
         &mut editor,
         "100 + 200 'hello world' # some comment",
         "000___000_sssssssssssss_cccccccccccccc",
+    );
+}
+
+#[test]
+fn test_syntax_shell() {
+    let mut editor = test_editor(&SYNTAX_SHELL);
+
+    expect_highlight(
+        &mut editor,
+        "alias x='rm -rf /' # this is bad",
+        "bbbbb___ssssssssss_ccccccccccccc",
+    );
+
+    expect_highlight(
+        &mut editor,
+        r#"function x() { echo "hello world"; }"#,
+        r#"kkkkkkkk_______bbbb_sssssssssssss___"#,
+    );
+
+    expect_highlight(
+        &mut editor,
+        "bg if bind exec until eval let false true # fg getopts jobs",
+        "bb_kk_bbbb_bbbb_kkkkk_bbbb_bbb_bbbbb_bbbb_ccccccccccccccccc",
     );
 }
