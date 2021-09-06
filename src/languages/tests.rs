@@ -103,7 +103,13 @@ fn test_syntax_rust() {
         &mut editor,
         "as break const f64 f32 i8 str isize",
         "kk_kkkkk_kkkkk_ttt_ttt_tt_ttt_ttttt",
-    )
+    );
+
+    expect_highlight_line(
+        &mut editor,
+        "/*some multi line comment*/100",
+        "CCCCCCCCCCCCCCCCCCCCCCCCCCC000",
+    );
 }
 
 #[test]
