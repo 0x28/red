@@ -1,3 +1,5 @@
+#![warn(clippy::cognitive_complexity)]
+
 use libc::STDIN_FILENO;
 use std::cmp::Ordering;
 use std::env;
@@ -5,6 +7,7 @@ use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::iter::Enumerate;
 use std::path::{Path, PathBuf};
 use std::sync::{atomic, atomic::AtomicBool, Arc};
 use std::time::SystemTime;
@@ -227,8 +230,7 @@ impl Drop for Editor {
     fn drop(&mut self) {
         // NOTE: Don't panic while dropping!
         if let Some(terimos) = &self.original_termios {
-            if let Err(e) =
-                termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, terimos)
+            if let Err(e) = termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, terimos)
             {
                 eprintln!("tcsetattr error: {}", e)
             }
@@ -284,9 +286,204 @@ fn is_separator(c: char) -> bool {
     c.is_whitespace() || c == '\0' || ",.()+-/*=~%<>[];".contains(c)
 }
 
+struct SyntaxState {
+    prev_sep: bool,
+    in_comment: bool,
+    in_string: Option<char>,
+    single_line_comment: Vec<char>,
+    multi_line_comment: (Vec<char>, Vec<char>),
+}
+
+impl SyntaxState {
+    fn maybe_highlight_sl_comment(
+        &self,
+        highlights: &mut [Highlight],
+        render: &[char],
+    ) -> bool {
+        if self.in_string.is_none()
+            && !self.in_comment
+            && !self.single_line_comment.is_empty()
+            && render.starts_with(&self.single_line_comment)
+        {
+            highlights.fill(Highlight::Comment);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn maybe_highlight_ml_comment(
+        &mut self,
+        highlights: &mut [Highlight],
+        render: &[char],
+        iter: &mut impl Iterator,
+    ) -> bool {
+        if !self.multi_line_comment.0.is_empty()
+            && !self.multi_line_comment.1.is_empty()
+            && self.in_string.is_none()
+        {
+            if self.in_comment {
+                highlights[0] = Highlight::MultiLineComment;
+                if render.starts_with(&self.multi_line_comment.1) {
+                    highlights[0..self.multi_line_comment.1.len()]
+                        .fill(Highlight::MultiLineComment);
+
+                    for _ in 0..self.multi_line_comment.1.len() - 1 {
+                        iter.next();
+                    }
+
+                    self.in_comment = false;
+                    self.prev_sep = true;
+                }
+                return true;
+            } else if render.starts_with(&self.multi_line_comment.0) {
+                highlights[0..self.multi_line_comment.0.len()]
+                    .fill(Highlight::MultiLineComment);
+
+                for _ in 0..self.multi_line_comment.0.len() - 1 {
+                    iter.next();
+                }
+
+                self.in_comment = true;
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn maybe_highlight_chars(
+        &self,
+        syntax: &Syntax,
+        highlights: &mut [Highlight],
+        render: &[char],
+        idx: usize,
+    ) -> bool {
+        let c = render[idx];
+        if syntax.flags & HIGHLIGHT_CHARS != 0 && c == '\'' {
+            if idx >= 2 && render[idx - 2] == '\'' {
+                highlights[idx - 2..=idx].fill(Highlight::String);
+                return true;
+            } else if idx >= 3
+                && render[idx - 3] == '\''
+                && render[idx - 2] == '\\'
+            {
+                highlights[idx - 3..=idx].fill(Highlight::String);
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn maybe_highlight_string(
+        &mut self,
+        syntax: &Syntax,
+        highlights: &mut [Highlight],
+        render: &[char],
+        idx: usize,
+        iter: &mut Enumerate<impl Iterator>,
+    ) -> bool {
+        let c = render[idx];
+        if syntax.flags & HIGHLIGHT_STRINGS != 0 {
+            if let Some(delimit) = self.in_string {
+                highlights[idx] = Highlight::String;
+                if c == '\\' {
+                    if let Some((i, _)) = iter.next() {
+                        highlights[i] = Highlight::String;
+                        return true;
+                    }
+                } else if c == delimit {
+                    self.in_string = None;
+                }
+                self.prev_sep = true;
+                return true;
+            } else if syntax.string_delimiter.contains(c) {
+                self.in_string = Some(c);
+                highlights[idx] = Highlight::String;
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn maybe_highlight_number(
+        &mut self,
+        syntax: &Syntax,
+        highlights: &mut [Highlight],
+        render: &[char],
+        idx: usize,
+        prev_hl: Highlight,
+    ) -> bool {
+        let c = render[idx];
+        if syntax.flags & HIGHLIGHT_NUMBERS != 0
+            && (c.is_digit(10)
+                && (self.prev_sep || prev_hl == Highlight::Number)
+                || (c == '.' && prev_hl == Highlight::Number))
+        {
+            highlights[idx] = Highlight::Number;
+            self.prev_sep = false;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn maybe_highlight_symbols(
+        &mut self,
+        syntax: &Syntax,
+        highlights: &mut [Highlight],
+        render: &[char],
+        idx: usize,
+        iter: &mut impl Iterator,
+    ) -> bool {
+        if self.prev_sep {
+            let mut found_symbol = false;
+
+            for (hl, list) in [
+                (Highlight::Keyword, syntax.keywords),
+                (Highlight::Type, syntax.types),
+                (Highlight::Builtin, syntax.builtins),
+            ] {
+                for symbol in list {
+                    let symbol = symbol.chars().collect::<Vec<_>>();
+                    if render[idx..].starts_with(&symbol)
+                        && is_separator(
+                            *render.get(idx + symbol.len()).unwrap_or(&'\0'),
+                        )
+                    {
+                        highlights[idx..idx + symbol.len()].fill(hl);
+
+                        for _ in 0..symbol.len() - 1 {
+                            iter.next();
+                        }
+
+                        found_symbol = true;
+                        break;
+                    }
+                }
+            }
+
+            if found_symbol {
+                self.prev_sep = false;
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
 impl Editor {
     fn update_syntax(&mut self, row_idx: usize) {
-        let mut in_comment = row_idx > 0 && self.rows[row_idx - 1].in_comment;
+        let mut sstate = SyntaxState {
+            prev_sep: true,
+            in_string: None,
+            in_comment: row_idx > 0 && self.rows[row_idx - 1].in_comment,
+            single_line_comment: vec![],
+            multi_line_comment: (vec![], vec![]),
+        };
         let num_rows = self.rows.len();
         let row = &mut self.rows[row_idx];
 
@@ -298,14 +495,11 @@ impl Editor {
             None => return,
         };
 
-        let mut prev_sep = true;
-        let mut in_string = None;
-
-        let single_line_comment =
-            syntax.single_line_comment.chars().collect::<Vec<_>>();
-        let multi_line_comment = (
-            syntax.multi_line_comment.0.chars().collect::<Vec<_>>(),
-            syntax.multi_line_comment.1.chars().collect::<Vec<_>>(),
+        sstate.single_line_comment =
+            syntax.single_line_comment.chars().collect();
+        sstate.multi_line_comment = (
+            syntax.multi_line_comment.0.chars().collect(),
+            syntax.multi_line_comment.1.chars().collect(),
         );
 
         let mut iter = row.render.iter().enumerate();
@@ -317,131 +511,65 @@ impl Editor {
                 .unwrap_or(&Highlight::Normal)
                 .clone();
 
-            if in_string.is_none()
-                && !in_comment
-                && !single_line_comment.is_empty()
-                && row.render[idx..].starts_with(&single_line_comment)
-            {
-                row.highlights[idx..].fill(Highlight::Comment);
+            if sstate.maybe_highlight_sl_comment(
+                &mut row.highlights[idx..],
+                &row.render[idx..],
+            ) {
                 break;
             }
 
-            if !multi_line_comment.0.is_empty()
-                && !multi_line_comment.1.is_empty()
-                && in_string.is_none()
-            {
-                if in_comment {
-                    row.highlights[idx] = Highlight::MultiLineComment;
-                    if row.render[idx..].starts_with(&multi_line_comment.1) {
-                        row.highlights[idx..idx + multi_line_comment.1.len()]
-                            .fill(Highlight::MultiLineComment);
-
-                        for _ in 0..multi_line_comment.1.len() - 1 {
-                            iter.next();
-                        }
-
-                        in_comment = false;
-                        prev_sep = true;
-                    }
-                    continue;
-                } else if row.render[idx..].starts_with(&multi_line_comment.0) {
-                    row.highlights[idx..idx + multi_line_comment.0.len()]
-                        .fill(Highlight::MultiLineComment);
-
-                    for _ in 0..multi_line_comment.0.len() - 1 {
-                        iter.next();
-                    }
-
-                    in_comment = true;
-                    continue;
-                }
-            }
-
-            if syntax.flags & HIGHLIGHT_CHARS != 0 && c == '\'' {
-                let line_idx = editor_row_render_to_cursor(row, idx);
-                if line_idx >= 2 && row.line[line_idx - 2] == '\'' {
-                    row.highlights[idx - 2..=idx].fill(Highlight::String);
-                    continue;
-                }
-                if line_idx >= 3
-                    && row.line[line_idx - 3] == '\''
-                    && row.line[line_idx - 2] == '\\'
-                {
-                    row.highlights[idx - 3..=idx].fill(Highlight::String);
-                    continue;
-                }
-            }
-
-            if syntax.flags & HIGHLIGHT_STRINGS != 0 {
-                if let Some(delimit) = in_string {
-                    row.highlights[idx] = Highlight::String;
-                    if c == '\\' {
-                        if let Some((i, _)) = iter.next() {
-                            row.highlights[i] = Highlight::String;
-                            continue;
-                        }
-                    } else if c == delimit {
-                        in_string = None;
-                    }
-                    prev_sep = true;
-                    continue;
-                } else if syntax.string_delimiter.contains(c) {
-                    in_string = Some(c);
-                    row.highlights[idx] = Highlight::String;
-                    continue;
-                }
-            }
-
-            if syntax.flags & HIGHLIGHT_NUMBERS != 0
-                && (c.is_digit(10)
-                    && (prev_sep || prev_hl == Highlight::Number)
-                    || (c == '.' && prev_hl == Highlight::Number))
-            {
-                row.highlights[idx] = Highlight::Number;
-                prev_sep = false;
+            if sstate.maybe_highlight_ml_comment(
+                &mut row.highlights[idx..],
+                &row.render[idx..],
+                &mut iter,
+            ) {
                 continue;
             }
 
-            if prev_sep {
-                let mut found_symbol = false;
-
-                for (hl, list) in [
-                    (Highlight::Keyword, syntax.keywords),
-                    (Highlight::Type, syntax.types),
-                    (Highlight::Builtin, syntax.builtins),
-                ] {
-                    for symbol in list {
-                        let symbol = symbol.chars().collect::<Vec<_>>();
-                        if row.render[idx..].starts_with(&symbol)
-                            && is_separator(
-                                *row.render
-                                    .get(idx + symbol.len())
-                                    .unwrap_or(&'\0'),
-                            )
-                        {
-                            row.highlights[idx..idx + symbol.len()].fill(hl);
-
-                            for _ in 0..symbol.len() - 1 {
-                                iter.next();
-                            }
-
-                            found_symbol = true;
-                            break;
-                        }
-                    }
-                }
-
-                if found_symbol {
-                    prev_sep = false;
-                    continue;
-                }
+            if sstate.maybe_highlight_chars(
+                syntax,
+                &mut row.highlights,
+                &row.render,
+                idx,
+            ) {
+                continue;
             }
 
-            prev_sep = is_separator(c);
+            if sstate.maybe_highlight_string(
+                syntax,
+                &mut row.highlights,
+                &row.render,
+                idx,
+                &mut iter,
+            ) {
+                continue;
+            }
+
+            if sstate.maybe_highlight_number(
+                syntax,
+                &mut row.highlights,
+                &row.render,
+                idx,
+                prev_hl,
+            ) {
+                continue;
+            }
+
+            if sstate.maybe_highlight_symbols(
+                syntax,
+                &mut row.highlights,
+                &row.render,
+                idx,
+                &mut iter,
+            ) {
+                continue;
+            }
+
+            sstate.prev_sep = is_separator(c);
         }
 
-        let in_comment_changed = row.in_comment != in_comment;
-        row.in_comment = in_comment;
+        let in_comment_changed = row.in_comment != sstate.in_comment;
+        row.in_comment = sstate.in_comment;
         if in_comment_changed && row.index + 1 < num_rows {
             let idx = row.index;
             self.update_syntax(idx + 1);
@@ -486,6 +614,7 @@ fn editor_row_cursor_to_render(row: &Row, cursor_x: usize) -> usize {
     render_x
 }
 
+#[allow(dead_code)]
 fn editor_row_render_to_cursor(row: &Row, render_x: usize) -> usize {
     let mut current_render_x = 0;
 
@@ -740,7 +869,7 @@ fn editor_find_callback(editor: &mut Editor, needle: &[char], key: EditorKey) {
             }
 
             editor.stored_hl = Some((search_idx, row.highlights.clone()));
-            let render_idx = editor_row_cursor_to_render(&row, idx);
+            let render_idx = editor_row_cursor_to_render(row, idx);
             row.highlights[render_idx..render_idx + needle.len()]
                 .fill(Highlight::Match);
             break;
