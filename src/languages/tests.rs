@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::{atomic::AtomicBool, Arc};
 use std::time::SystemTime;
 
@@ -246,4 +248,38 @@ fn test_backslash_highlighting() {
 
     expect_highlight_line(&mut editor, r#"char c = '\\';"#, "tttt_____ssss_");
     expect_highlight_line(&mut editor, r#"char c = '\t';"#, "tttt_____ssss_");
+}
+
+#[test]
+fn test_select_syntax() {
+    let mut editor = test_editor(&SYNTAX_C);
+    editor.syntax = None;
+
+    editor.file = Some(PathBuf::from_str("main.c").unwrap());
+    editor.select_syntax_highlight();
+    assert_eq!(editor.syntax, Some(&SYNTAX_C));
+
+    editor.file = Some(PathBuf::from_str("prog.rs").unwrap());
+    editor.select_syntax_highlight();
+    assert_eq!(editor.syntax, Some(&SYNTAX_RUST));
+
+    editor.file = Some(PathBuf::from_str("app.hs").unwrap());
+    editor.select_syntax_highlight();
+    assert_eq!(editor.syntax, Some(&SYNTAX_HASKELL));
+
+    editor.file = Some(PathBuf::from_str("script.py").unwrap());
+    editor.select_syntax_highlight();
+    assert_eq!(editor.syntax, Some(&SYNTAX_PYTHON));
+
+    editor.file = Some(PathBuf::from_str("start.sh").unwrap());
+    editor.select_syntax_highlight();
+    assert_eq!(editor.syntax, Some(&SYNTAX_SHELL));
+
+    editor.file = Some(PathBuf::from_str("test.txt").unwrap());
+    editor.select_syntax_highlight();
+    assert_eq!(editor.syntax, None);
+
+    editor.file = None;
+    editor.select_syntax_highlight();
+    assert_eq!(editor.syntax, None);
 }

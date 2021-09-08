@@ -1,3 +1,4 @@
+#[derive(Debug, PartialEq, Eq)]
 pub struct Syntax {
     pub name: &'static str,
     pub extensions: &'static [&'static str],
