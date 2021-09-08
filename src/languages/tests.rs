@@ -239,3 +239,11 @@ fn test_multiline_comment() {
         &["0000", "__", "kkk_____sss_"],
     );
 }
+
+#[test]
+fn test_backslash_highlighting() {
+    let mut editor = test_editor(&SYNTAX_C);
+
+    expect_highlight_line(&mut editor, r#"char c = '\\';"#, "tttt_____ssss_");
+    expect_highlight_line(&mut editor, r#"char c = '\t';"#, "tttt_____ssss_");
+}
