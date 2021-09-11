@@ -1128,8 +1128,10 @@ impl Editor {
         self.clipboard = std::mem::take(&mut clipboard);
     }
 
-    fn process_keypress(&mut self) -> Result<bool, Box<dyn Error>> {
-        let key = self.read_key()?;
+    fn process_keypress(
+        &mut self,
+        key: EditorKey,
+    ) -> Result<bool, Box<dyn Error>> {
         match key {
             EditorKey::Ctrl('m') => {
                 self.insert_newline();
@@ -1526,7 +1528,8 @@ impl Editor {
     fn run(&mut self) -> Result<(), Box<dyn Error>> {
         loop {
             self.refresh_screen()?;
-            if !self.process_keypress()? {
+            let key = self.read_key()?;
+            if !self.process_keypress(key)? {
                 break;
             }
         }
