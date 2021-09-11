@@ -1,3 +1,4 @@
+use std::io;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{atomic::AtomicBool, Arc};
@@ -38,6 +39,8 @@ fn test_editor(syntax: &'static Syntax) -> Editor {
         syntax: Some(syntax),
         mark: None,
         clipboard: String::new(),
+        stdin: Box::new(io::stdin()),
+        stdout: Box::new(io::stdout()),
     }
 }
 

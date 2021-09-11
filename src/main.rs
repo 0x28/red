@@ -185,6 +185,8 @@ struct Editor {
     syntax: Option<&'static Syntax>,
     mark: Option<Position>,
     clipboard: String,
+    stdin: Box<dyn Read>,
+    stdout: Box<dyn Write>,
 }
 
 impl Editor {
@@ -222,6 +224,8 @@ impl Editor {
             syntax: None,
             mark: None,
             clipboard: String::new(),
+            stdin: Box::new(io::stdin()),
+            stdout: Box::new(io::stdout()),
         })
     }
 }
@@ -943,7 +947,7 @@ impl Editor {
 
     fn read_key(&mut self) -> Result<EditorKey, Box<dyn Error>> {
         let mut cbyte = [0; 1];
-        while io::stdin().read(&mut cbyte)? != 1 {
+        while self.stdin.read(&mut cbyte)? != 1 {
             self.maybe_update_screen()?;
         }
         let c = cbyte[0] as char;
@@ -951,11 +955,11 @@ impl Editor {
         if c == ESC {
             let mut seq = [0; 3];
 
-            if io::stdin().read_exact(&mut seq[..1]).is_err() {
+            if self.stdin.read_exact(&mut seq[..1]).is_err() {
                 return Ok(EditorKey::Other(ESC));
             }
 
-            if seq[0] != b'[' || io::stdin().read_exact(&mut seq[1..2]).is_err()
+            if seq[0] != b'[' || self.stdin.read_exact(&mut seq[1..2]).is_err()
             {
                 return Ok(EditorKey::Meta(seq[0] as char));
             }
@@ -970,7 +974,7 @@ impl Editor {
                 esc_seq
                     if esc_seq[0] == b'[' && esc_seq[1].is_ascii_digit() =>
                 {
-                    if io::stdin().read_exact(&mut seq[2..]).is_err() {
+                    if self.stdin.read_exact(&mut seq[2..]).is_err() {
                         return Ok(EditorKey::Other(ESC));
                     }
 
@@ -986,7 +990,7 @@ impl Editor {
                 _ => Ok(EditorKey::Other(ESC)),
             }
         } else {
-            let key = parse_utf8(cbyte[0], io::stdin())?;
+            let key = parse_utf8(cbyte[0], &mut self.stdin)?;
             match key {
                 '\0' => Ok(EditorKey::Ctrl(' ')),
                 '\x01'..='\x1a' => {
@@ -1140,7 +1144,7 @@ impl Editor {
                     self.quit_times -= 1;
                     return Ok(true);
                 } else {
-                    clear_screen(&mut io::stdout())?;
+                    clear_screen(&mut self.stdout)?;
                     return Ok(false);
                 }
             }
@@ -1491,8 +1495,6 @@ impl Editor {
 
     fn refresh_screen(&mut self) -> Result<(), Box<dyn Error>> {
         let mut buffer = vec![];
-        let mut stdout = io::stdout();
-
         self.scroll();
 
         buffer.write_all(ESC_SEQ_HIDE_CURSOR)?;
@@ -1509,8 +1511,8 @@ impl Editor {
 
         buffer.write_all(ESC_SEQ_SHOW_CURSOR)?;
 
-        stdout.write_all(&buffer)?;
-        stdout.flush()?;
+        self.stdout.write_all(&buffer)?;
+        self.stdout.flush()?;
 
         Ok(())
     }
