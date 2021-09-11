@@ -68,7 +68,7 @@ macro_rules! set_status_message {
     };
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum EditorKey {
     ArrowLeft,
     ArrowRight,
@@ -959,7 +959,8 @@ impl Editor {
                 return Ok(EditorKey::Other(ESC));
             }
 
-            if seq[0] != b'[' || self.stdin.read_exact(&mut seq[1..2]).is_err()
+            if !b"O[".contains(&seq[0])
+                || self.stdin.read_exact(&mut seq[1..2]).is_err()
             {
                 return Ok(EditorKey::Meta(seq[0] as char));
             }

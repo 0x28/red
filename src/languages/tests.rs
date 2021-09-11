@@ -15,7 +15,7 @@ use super::{
     Syntax, SYNTAX_C, SYNTAX_HASKELL, SYNTAX_PYTHON, SYNTAX_RUST, SYNTAX_SHELL,
 };
 
-fn test_editor(syntax: &'static Syntax) -> Editor {
+fn dummy_editor(syntax: &'static Syntax) -> Editor {
     Editor {
         original_termios: None,
         cursor_x: 0,
@@ -93,7 +93,7 @@ fn expect_highlight_line(editor: &mut Editor, line: &str, highlight: &str) {
 
 #[test]
 fn test_syntax_rust() {
-    let mut editor = test_editor(&SYNTAX_RUST);
+    let mut editor = dummy_editor(&SYNTAX_RUST);
 
     expect_highlight_line(&mut editor, "let x = 100;", "kkk_____000_");
     // TODO dots shouldn't be highlighted as numbers here
@@ -119,7 +119,7 @@ fn test_syntax_rust() {
 
 #[test]
 fn test_syntax_c() {
-    let mut editor = test_editor(&SYNTAX_C);
+    let mut editor = dummy_editor(&SYNTAX_C);
 
     expect_highlight_line(
         &mut editor,
@@ -145,7 +145,7 @@ fn test_syntax_c() {
 
 #[test]
 fn test_syntax_haskell() {
-    let mut editor = test_editor(&SYNTAX_HASKELL);
+    let mut editor = dummy_editor(&SYNTAX_HASKELL);
 
     expect_highlight_line(
         &mut editor,
@@ -170,7 +170,7 @@ fn test_syntax_haskell() {
 
 #[test]
 fn test_syntax_python() {
-    let mut editor = test_editor(&SYNTAX_PYTHON);
+    let mut editor = dummy_editor(&SYNTAX_PYTHON);
 
     expect_highlight_line(&mut editor, "import math", "kkkkkk_____");
 
@@ -189,7 +189,7 @@ fn test_syntax_python() {
 
 #[test]
 fn test_syntax_shell() {
-    let mut editor = test_editor(&SYNTAX_SHELL);
+    let mut editor = dummy_editor(&SYNTAX_SHELL);
 
     expect_highlight_line(
         &mut editor,
@@ -212,7 +212,7 @@ fn test_syntax_shell() {
 
 #[test]
 fn test_multiline_comment() {
-    let mut editor = test_editor(&SYNTAX_RUST);
+    let mut editor = dummy_editor(&SYNTAX_RUST);
 
     expect_highlight_lines(
         &mut editor,
@@ -247,7 +247,7 @@ fn test_multiline_comment() {
 
 #[test]
 fn test_backslash_highlighting() {
-    let mut editor = test_editor(&SYNTAX_C);
+    let mut editor = dummy_editor(&SYNTAX_C);
 
     expect_highlight_line(&mut editor, r#"char c = '\\';"#, "tttt_____ssss_");
     expect_highlight_line(&mut editor, r#"char c = '\t';"#, "tttt_____ssss_");
@@ -255,7 +255,7 @@ fn test_backslash_highlighting() {
 
 #[test]
 fn test_select_syntax() {
-    let mut editor = test_editor(&SYNTAX_C);
+    let mut editor = dummy_editor(&SYNTAX_C);
     editor.syntax = None;
 
     editor.file = Some(PathBuf::from_str("main.c").unwrap());
