@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::io::Read;
 use std::io::Write;
 use std::sync::atomic::AtomicBool;
@@ -138,4 +139,47 @@ fn test_read_key() {
     assert_eq!(editor.read_key().unwrap(), EditorKey::Ctrl('a'));
     assert_eq!(editor.read_key().unwrap(), EditorKey::Ctrl('b'));
     assert_eq!(editor.read_key().unwrap(), EditorKey::Ctrl('c'));
+}
+
+fn send_test_string(
+    editor: &mut Editor,
+    s: &str,
+) -> Result<(), Box<dyn Error>> {
+    for c in s.chars() {
+        assert!(editor.process_keypress(EditorKey::Other(c))?);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_process_keypress_simple() {
+    let stdin = b"";
+    let stdout = vec![];
+    let mut editor = dummy_editor(Box::new(&stdin[..]), Box::new(stdout));
+
+    send_test_string(&mut editor, "hello").unwrap();
+
+    assert_eq!(editor.rows.len(), 1);
+    assert_eq!(editor.rows[0].line.iter().collect::<String>(), "hello");
+
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+    assert_eq!(editor.rows.len(), 2);
+    assert_eq!(editor.rows[0].line.iter().collect::<String>(), "hello");
+
+    send_test_string(&mut editor, "world").unwrap();
+
+    assert_eq!(editor.rows.len(), 2);
+    assert_eq!(editor.rows[0].line.iter().collect::<String>(), "hello");
+    assert_eq!(editor.rows[1].line.iter().collect::<String>(), "world");
+    assert_eq!(editor.cursor_x, 5);
+    assert_eq!(editor.cursor_y, 1);
+
+    editor.process_keypress(EditorKey::Home).unwrap();
+    assert_eq!(editor.cursor_x, 0);
+    assert_eq!(editor.cursor_y, 1);
+
+    send_test_string(&mut editor, "--->").unwrap();
+
+    assert_eq!(editor.rows[1].line.iter().collect::<String>(), "--->world");
 }
