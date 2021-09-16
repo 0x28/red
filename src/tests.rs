@@ -9,6 +9,7 @@ use crate::Editor;
 use crate::EditorKey;
 use crate::Row;
 use crate::SearchDirection;
+use crate::BACKSPACE;
 use crate::ESC;
 use crate::RED_QUIT_TIMES;
 use crate::RED_STATUS_HEIGHT;
@@ -182,4 +183,54 @@ fn test_process_keypress_simple() {
     send_test_string(&mut editor, "--->").unwrap();
 
     assert_eq!(editor.rows[1].line.iter().collect::<String>(), "--->world");
+}
+
+#[test]
+fn test_deletion() {
+    let stdin = b"";
+    let stdout = vec![];
+    let mut editor = dummy_editor(Box::new(&stdin[..]), Box::new(stdout));
+
+    send_test_string(&mut editor, "hello").unwrap();
+
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+
+    assert_eq!(editor.rows[0].line.iter().collect::<String>(), "hello");
+    assert_eq!(editor.rows[1].line.iter().collect::<String>(), "");
+
+    editor
+        .process_keypress(EditorKey::Other(BACKSPACE))
+        .unwrap();
+    editor
+        .process_keypress(EditorKey::Other(BACKSPACE))
+        .unwrap();
+    editor
+        .process_keypress(EditorKey::Other(BACKSPACE))
+        .unwrap();
+
+    assert_eq!(editor.rows.len(), 1);
+    assert_eq!(editor.rows[0].line.iter().collect::<String>(), "hel");
+
+    editor.process_keypress(EditorKey::ArrowLeft).unwrap();
+    editor.process_keypress(EditorKey::ArrowLeft).unwrap();
+    editor.process_keypress(EditorKey::ArrowLeft).unwrap();
+
+    assert_eq!(editor.cursor_x, 0);
+    assert_eq!(editor.cursor_y, 0);
+
+    editor.process_keypress(EditorKey::Delete).unwrap();
+    editor.process_keypress(EditorKey::Delete).unwrap();
+
+    assert_eq!(editor.rows.len(), 1);
+    assert_eq!(editor.rows[0].line.iter().collect::<String>(), "l");
+
+    editor.process_keypress(EditorKey::Delete).unwrap();
+    editor.process_keypress(EditorKey::Delete).unwrap();
+    editor.process_keypress(EditorKey::Delete).unwrap();
+    editor.process_keypress(EditorKey::Delete).unwrap();
+    editor.process_keypress(EditorKey::Delete).unwrap();
+    editor.process_keypress(EditorKey::Delete).unwrap();
+
+    assert_eq!(editor.rows.len(), 1);
+    assert_eq!(editor.rows[0].line.iter().collect::<String>(), "");
 }
