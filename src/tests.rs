@@ -234,3 +234,41 @@ fn test_deletion() {
     assert_eq!(editor.rows.len(), 1);
     assert_eq!(editor.rows[0].line.iter().collect::<String>(), "");
 }
+
+#[test]
+fn test_copy_paste() {
+    let stdin = b"";
+    let stdout = vec![];
+    let mut editor = dummy_editor(Box::new(&stdin[..]), Box::new(stdout));
+
+    send_test_string(&mut editor, "this is a test").unwrap();
+
+    editor.process_keypress(EditorKey::Home).unwrap();
+
+    assert_eq!(editor.cursor_x, 0);
+    assert_eq!(editor.cursor_y, 0);
+
+    editor.process_keypress(EditorKey::Ctrl(' ')).unwrap();
+    assert_eq!(editor.mark, Some((0, 0)));
+
+    editor.process_keypress(EditorKey::ArrowRight).unwrap();
+    editor.process_keypress(EditorKey::ArrowRight).unwrap();
+    editor.process_keypress(EditorKey::ArrowRight).unwrap();
+    editor.process_keypress(EditorKey::ArrowRight).unwrap();
+    editor.process_keypress(EditorKey::Ctrl('c')).unwrap();
+    assert_eq!(editor.clipboard, "this");
+
+    editor.process_keypress(EditorKey::End).unwrap();
+    assert_eq!(editor.cursor_x, 14);
+    assert_eq!(editor.cursor_y, 0);
+
+    editor.process_keypress(EditorKey::Ctrl('v')).unwrap();
+    editor.process_keypress(EditorKey::Ctrl('v')).unwrap();
+    editor.process_keypress(EditorKey::Ctrl('v')).unwrap();
+
+    assert_eq!(editor.rows.len(), 1);
+    assert_eq!(
+        editor.rows[0].line.iter().collect::<String>(),
+        "this is a testthisthisthis"
+    );
+}
