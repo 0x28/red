@@ -48,7 +48,10 @@ proptest! {
     }
 }
 
-fn dummy_editor(stdin: Box<dyn Read>, stdout: Box<dyn Write>) -> Editor {
+fn dummy_editor<'i, 'o>(
+    stdin: Box<dyn Read + 'i>,
+    stdout: Box<dyn Write + 'o>,
+) -> Editor<'i, 'o> {
     Editor {
         original_termios: None,
         cursor_x: 0,

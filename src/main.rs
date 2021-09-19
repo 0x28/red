@@ -162,7 +162,7 @@ impl Row {
     }
 }
 
-struct Editor {
+struct Editor<'i, 'o> {
     original_termios: Option<Termios>,
     cursor_x: usize,
     cursor_y: usize,
@@ -185,12 +185,12 @@ struct Editor {
     syntax: Option<&'static Syntax>,
     mark: Option<Position>,
     clipboard: String,
-    stdin: Box<dyn Read>,
-    stdout: Box<dyn Write>,
+    stdin: Box<dyn Read + 'i>,
+    stdout: Box<dyn Write + 'o>,
 }
 
-impl Editor {
-    fn new() -> Result<Editor, Box<dyn Error>> {
+impl<'i, 'o> Editor<'i, 'o> {
+    fn new() -> Result<Editor<'i, 'o>, Box<dyn Error>> {
         let original_termios = Termios::from_fd(STDIN_FILENO)?;
         enable_raw_mode()?;
         let (rows, cols) = get_window_size()?;
@@ -230,7 +230,7 @@ impl Editor {
     }
 }
 
-impl Drop for Editor {
+impl<'i, 'o> Drop for Editor<'i, 'o> {
     fn drop(&mut self) {
         // NOTE: Don't panic while dropping!
         if let Some(terimos) = &self.original_termios {
@@ -479,7 +479,7 @@ impl SyntaxState {
     }
 }
 
-impl Editor {
+impl<'i, 'o> Editor<'i, 'o> {
     fn update_syntax(&mut self, row_idx: usize) {
         let mut sstate = SyntaxState {
             prev_sep: true,
@@ -637,7 +637,7 @@ fn editor_row_render_to_cursor(row: &Row, render_x: usize) -> usize {
     row.line.len()
 }
 
-impl Editor {
+impl<'i, 'o> Editor<'i, 'o> {
     fn row_append(&mut self, row: usize, content: &[char]) {
         self.rows[row].line.extend_from_slice(content);
         self.update_row(row);
@@ -881,7 +881,7 @@ fn editor_find_callback(editor: &mut Editor, needle: &[char], key: EditorKey) {
     }
 }
 
-impl Editor {
+impl<'i, 'o> Editor<'i, 'o> {
     fn find(&mut self) -> Result<(), Box<dyn Error>> {
         let saved_cx = self.cursor_x;
         let saved_cy = self.cursor_y;
@@ -1282,7 +1282,7 @@ fn clear_screen(dest: &mut impl Write) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-impl Editor {
+impl<'i, 'o> Editor<'i, 'o> {
     fn line_number_sep_len() -> usize {
         RED_LINE_SEP.chars().count()
     }
