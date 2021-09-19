@@ -1,16 +1,21 @@
 use std::error::Error;
 use std::io::Read;
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use crate::languages::SYNTAX_C;
+use crate::languages::SYNTAX_HASKELL;
 use crate::Editor;
 use crate::EditorKey;
 use crate::Row;
 use crate::SearchDirection;
 use crate::BACKSPACE;
 use crate::ESC;
+use crate::ESC_SEQ_INVERT_COLORS;
+use crate::ESC_SEQ_RESET_ALL;
 use crate::RED_QUIT_TIMES;
 use crate::RED_STATUS_HEIGHT;
 use crate::RED_TAB_STOP;
@@ -58,8 +63,8 @@ fn dummy_editor<'i, 'o>(
         cursor_y: 0,
         render_x: 0,
         screen_rows: 50 - RED_STATUS_HEIGHT,
-        screen_cols: 80,
-        editor_cols: 80,
+        screen_cols: 60,
+        editor_cols: 60,
         row_offset: 0,
         col_offset: 0,
         rows: vec![],
@@ -274,4 +279,64 @@ fn test_copy_paste() {
         editor.rows[0].line.iter().collect::<String>(),
         "this is a testthisthisthis"
     );
+}
+
+#[test]
+fn test_draw_status_bar() {
+    let stdin = vec![];
+    let stdout = vec![];
+    let mut status_bar = vec![];
+    let mut editor = dummy_editor(Box::new(&stdin[..]), Box::new(stdout));
+
+    send_test_string(&mut editor, "abc").unwrap();
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+    send_test_string(&mut editor, "def").unwrap();
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+    send_test_string(&mut editor, "ghi").unwrap();
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+
+    let tests = [
+        (
+            None,
+            None,
+            "[No Name] - 4 lines (modified)                   no ft | 3/4",
+        ),
+        (
+            Some(&SYNTAX_HASKELL),
+            Some(PathBuf::from("main.hs")),
+            "main.hs - 4 lines                              haskell | 2/4",
+        ),
+        (
+            Some(&SYNTAX_C),
+            Some(PathBuf::from("test.c")),
+            "test.c - 4 lines (modified)                          c | 1/4",
+        ),
+    ];
+
+    editor.dirty = false;
+
+    for (syntax, file, expected) in tests {
+        editor.syntax = syntax;
+        editor.file = file;
+
+        editor.process_keypress(EditorKey::ArrowUp).unwrap();
+        editor.dirty = !editor.dirty;
+
+        editor.draw_status_bar(&mut status_bar).unwrap();
+        assert!(status_bar.starts_with(ESC_SEQ_INVERT_COLORS));
+        let mut suffix = ESC_SEQ_RESET_ALL.to_vec();
+        suffix.extend_from_slice(b"\r\n");
+        assert!(status_bar.ends_with(&suffix));
+
+        let status_bar_str = status_bar
+            [ESC_SEQ_INVERT_COLORS.len()..status_bar.len() - suffix.len()]
+            .iter()
+            .map(|b| *b as char)
+            .collect::<String>();
+
+        assert_eq!(status_bar_str, expected);
+        assert_eq!(status_bar_str.len(), editor.screen_cols);
+
+        status_bar.clear();
+    }
 }
