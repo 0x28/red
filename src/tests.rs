@@ -340,3 +340,54 @@ fn test_draw_status_bar() {
         status_bar.clear();
     }
 }
+
+#[test]
+fn test_find() {
+    let stdin = b"";
+    let stdout = vec![];
+    let mut editor = dummy_editor(Box::new(&stdin[..]), Box::new(stdout));
+
+    send_test_string(&mut editor, "text @ line 1").unwrap();
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+    send_test_string(&mut editor, "more text @ line 2").unwrap();
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+    send_test_string(&mut editor, "find this @ line 3").unwrap();
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+    send_test_string(&mut editor, "or this @ line 4").unwrap();
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+
+    editor.process_keypress(EditorKey::Home).unwrap();
+    editor.process_keypress(EditorKey::ArrowUp).unwrap();
+    editor.process_keypress(EditorKey::ArrowUp).unwrap();
+    editor.process_keypress(EditorKey::ArrowUp).unwrap();
+    editor.process_keypress(EditorKey::ArrowUp).unwrap();
+    editor.process_keypress(EditorKey::ArrowUp).unwrap();
+
+    assert_eq!(editor.cursor_x, 0);
+    assert_eq!(editor.cursor_y, 0);
+
+    let stdin = b"line\x06\x0d"; // "line", ctrl-f, enter
+    editor.stdin = Box::new(&stdin[..]);
+    editor.process_keypress(EditorKey::Ctrl('f')).unwrap();
+
+    assert_eq!(editor.cursor_x, 12);
+    assert_eq!(editor.cursor_y, 1);
+    assert_eq!(
+        editor.rows[editor.cursor_y].line.iter().collect::<String>(),
+        "more text @ line 2"
+    );
+
+    let stdin = b"text[A\x0d"; // "text", up arrow, enter
+    editor.stdin = Box::new(&stdin[..]);
+    editor.process_keypress(EditorKey::Ctrl('f')).unwrap();
+
+    assert_eq!(editor.cursor_x, 5);
+    assert_eq!(editor.cursor_y, 1);
+
+    let stdin = b"4\x06"; // "4", ctrl-f, escape
+    editor.stdin = Box::new(&stdin[..]);
+    editor.process_keypress(EditorKey::Ctrl('f')).unwrap();
+
+    assert_eq!(editor.cursor_x, 5);
+    assert_eq!(editor.cursor_y, 1);
+}
