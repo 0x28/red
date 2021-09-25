@@ -8,6 +8,7 @@ use std::time::SystemTime;
 
 use crate::languages::SYNTAX_C;
 use crate::languages::SYNTAX_HASKELL;
+use crate::languages::SYNTAX_RUST;
 use crate::Editor;
 use crate::EditorKey;
 use crate::Row;
@@ -22,6 +23,10 @@ use crate::RED_TAB_STOP;
 use crate::{editor_row_cursor_to_render, editor_row_render_to_cursor};
 
 use proptest::prelude::*;
+
+fn test_file(filename: &str) -> String {
+    env!("CARGO_MANIFEST_DIR").to_owned() + "/src/tests/" + filename
+}
 
 #[test]
 fn test_render_to_cursor() {
@@ -390,4 +395,39 @@ fn test_find() {
 
     assert_eq!(editor.cursor_x, 5);
     assert_eq!(editor.cursor_y, 1);
+}
+
+#[test]
+fn test_open_file() {
+    let mut editor = dummy_editor(Box::new(&b""[..]), Box::new(vec![]));
+    let file = test_file("nonexistent.txt");
+    assert!(editor.open(&PathBuf::from(file)).is_ok());
+    assert!(editor.rows.is_empty());
+    assert_eq!(editor.syntax, None);
+
+    let mut editor = dummy_editor(Box::new(&b""[..]), Box::new(vec![]));
+    let file = test_file("simple.txt");
+    assert!(editor.open(&PathBuf::from(file)).is_ok());
+    assert_eq!(editor.rows.len(), 3);
+    assert_eq!(editor.syntax, None);
+
+    assert_eq!(editor.rows[0].line.iter().collect::<String>(), "ABC");
+    assert_eq!(editor.rows[1].line.iter().collect::<String>(), "DEF");
+    assert_eq!(editor.rows[2].line.iter().collect::<String>(), "GHI");
+
+    let mut editor = dummy_editor(Box::new(&b""[..]), Box::new(vec![]));
+    let file = test_file("rust_sample.rs");
+    assert!(editor.open(&PathBuf::from(file)).is_ok());
+    assert_eq!(editor.rows.len(), 3);
+    assert_eq!(editor.syntax, Some(&SYNTAX_RUST));
+
+    assert_eq!(
+        editor.rows[0].line.iter().collect::<String>(),
+        "fn main() {"
+    );
+    assert_eq!(
+        editor.rows[1].line.iter().collect::<String>(),
+        "    println!(\"hello world\");"
+    );
+    assert_eq!(editor.rows[2].line.iter().collect::<String>(), "}");
 }
