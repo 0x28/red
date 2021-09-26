@@ -13,3 +13,4 @@ signal-hook = "0.3.10"
 
 [dev-dependencies]
 proptest = "1.0.0"
+tempfile = "3.2.0"

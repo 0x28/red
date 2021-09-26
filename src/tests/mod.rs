@@ -6,6 +6,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use tempfile::NamedTempFile;
+
 use crate::languages::SYNTAX_C;
 use crate::languages::SYNTAX_HASKELL;
 use crate::languages::SYNTAX_RUST;
@@ -430,4 +432,26 @@ fn test_open_file() {
         "    println!(\"hello world\");"
     );
     assert_eq!(editor.rows[2].line.iter().collect::<String>(), "}");
+}
+
+#[test]
+fn test_save_file() {
+    let file = NamedTempFile::new().unwrap();
+    let file_path = file.into_temp_path();
+    let mut write_editor = dummy_editor(Box::new(&b""[..]), Box::new(vec![]));
+
+    write_editor.open(&file_path).unwrap();
+    send_test_string(&mut write_editor, "this is a test").unwrap();
+    assert_eq!(write_editor.dirty, true);
+    write_editor.save().unwrap();
+    assert_eq!(write_editor.dirty, false);
+
+    let mut read_editor = dummy_editor(Box::new(&b""[..]), Box::new(vec![]));
+    read_editor.open(&file_path).unwrap();
+    assert_eq!(read_editor.rows.len(), 1);
+
+    assert_eq!(
+        read_editor.rows[0].line.iter().collect::<String>(),
+        "this is a test"
+    );
 }
