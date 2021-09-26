@@ -11,6 +11,8 @@ use tempfile::NamedTempFile;
 use crate::languages::SYNTAX_C;
 use crate::languages::SYNTAX_HASKELL;
 use crate::languages::SYNTAX_RUST;
+use crate::parse_utf8;
+use crate::red_error::EditorError;
 use crate::Editor;
 use crate::EditorKey;
 use crate::Row;
@@ -453,5 +455,35 @@ fn test_save_file() {
     assert_eq!(
         read_editor.rows[0].line.iter().collect::<String>(),
         "this is a test"
+    );
+}
+
+#[test]
+fn test_parse_utf8() {
+    let input = b"";
+    assert_eq!(parse_utf8(0x24, &input[..]).unwrap(), '$');
+
+    let input = b"\xa2";
+    assert_eq!(parse_utf8(0xc2, &input[..]).unwrap(), '¢');
+
+    let input = b"\xa4\xb9";
+    assert_eq!(parse_utf8(0xe0, &input[..]).unwrap(), 'ह');
+
+    let input = b"\x82\xac";
+    assert_eq!(parse_utf8(0xe2, &input[..]).unwrap(), '€');
+
+    let input = b"\x95\x9c";
+    assert_eq!(parse_utf8(0xed, &input[..]).unwrap(), '한');
+
+    let input = b"\x90\x8d\x88";
+    assert_eq!(parse_utf8(0xf0, &input[..]).unwrap(), '𐍈');
+
+    let input = b"\x11\x11\x11";
+    assert_eq!(
+        parse_utf8(0xff, &input[..])
+            .unwrap_err()
+            .downcast()
+            .unwrap(),
+        Box::new(EditorError::InvalidUtf8Input)
     );
 }

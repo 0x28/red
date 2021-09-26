@@ -1,6 +1,6 @@
 use std::{error::Error, fmt::Display};
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum EditorError {
     ParseGetCursorResponse,
     InvalidUtf8Input,
