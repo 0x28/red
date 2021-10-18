@@ -291,6 +291,24 @@ fn test_copy_paste() {
 }
 
 #[test]
+fn test_update_syntax() {
+    let stdin = b"";
+    let stdout = vec![];
+    let mut editor = dummy_editor(Box::new(&stdin[..]), Box::new(stdout));
+    editor.syntax = Some(&SYNTAX_RUST);
+    send_test_string(&mut editor, "/*").unwrap();
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+    editor.process_keypress(EditorKey::Ctrl('m')).unwrap();
+    send_test_string(&mut editor, "*/").unwrap();
+    editor.process_keypress(EditorKey::ArrowUp).unwrap();
+    send_test_string(&mut editor, "x").unwrap();
+
+    assert_eq!(editor.cursor_y, 2);
+    assert!(editor.rows[editor.cursor_y].in_comment);
+}
+
+#[test]
 fn test_draw_status_bar() {
     let stdin = vec![];
     let stdout = vec![];

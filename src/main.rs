@@ -713,6 +713,7 @@ impl<'i, 'o> Editor<'i, 'o> {
     fn insert_newline(&mut self) {
         if self.cursor_x == 0 {
             self.rows.insert(self.cursor_y, Row::empty(self.cursor_y));
+            self.update_row(self.cursor_y);
         } else if let Some(current_row) = self.rows.get_mut(self.cursor_y) {
             let next_line = current_row.line[self.cursor_x..].to_vec();
             let next_row = Row {
