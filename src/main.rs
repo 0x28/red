@@ -21,7 +21,8 @@ mod red_error;
 mod red_ioctl;
 use languages::Syntax;
 use languages::{
-    HIGHLIGHT_CHARS, HIGHLIGHT_NUMBERS, HIGHLIGHT_STRINGS, SYNTAXES,
+    HIGHLIGHT_CASE_INSENSITIVE, HIGHLIGHT_CHARS, HIGHLIGHT_NUMBERS,
+    HIGHLIGHT_STRINGS, SYNTAXES,
 };
 use red_error::EditorError;
 use red_ioctl::get_window_size_ioctl;
@@ -286,8 +287,13 @@ fn get_window_size() -> Result<(usize, usize), Box<dyn Error>> {
     get_cursor_position()
 }
 
-fn is_separator(c: char) -> bool {
-    c.is_whitespace() || c == '\0' || ",.()+-/*=~%<>[];".contains(c)
+fn is_separator(syntax: &Syntax, c: char) -> bool {
+    c.is_whitespace()
+        || c == '\0'
+        || syntax
+            .custom_separator
+            .unwrap_or(",.()+-/*=~%<>[];")
+            .contains(c)
 }
 
 struct SyntaxState {
@@ -434,6 +440,24 @@ impl SyntaxState {
         }
     }
 
+    fn is_symbol(
+        syntax: &Syntax,
+        render: &[char],
+        idx: usize,
+        symbol: &str,
+    ) -> bool {
+        render[idx..].iter().zip(symbol.chars()).all(|(&r, s)| {
+            if syntax.flags & HIGHLIGHT_CASE_INSENSITIVE != 0 {
+                r.to_lowercase().to_string() == s.to_lowercase().to_string()
+            } else {
+                r == s
+            }
+        }) && is_separator(
+            syntax,
+            *render.get(idx + symbol.len()).unwrap_or(&'\0'),
+        )
+    }
+
     fn maybe_highlight_symbols(
         &mut self,
         syntax: &Syntax,
@@ -451,12 +475,7 @@ impl SyntaxState {
                 (Highlight::Builtin, syntax.builtins),
             ] {
                 for symbol in list {
-                    let symbol = symbol.chars().collect::<Vec<_>>();
-                    if render[idx..].starts_with(&symbol)
-                        && is_separator(
-                            *render.get(idx + symbol.len()).unwrap_or(&'\0'),
-                        )
-                    {
+                    if SyntaxState::is_symbol(syntax, render, idx, symbol) {
                         highlights[idx..idx + symbol.len()].fill(hl);
 
                         for _ in 0..symbol.len() - 1 {
@@ -569,7 +588,7 @@ impl<'i, 'o> Editor<'i, 'o> {
                 continue;
             }
 
-            sstate.prev_sep = is_separator(c);
+            sstate.prev_sep = is_separator(syntax, c);
         }
 
         let in_comment_changed = row.in_comment != sstate.in_comment;

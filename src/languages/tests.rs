@@ -12,7 +12,8 @@ use crate::RED_QUIT_TIMES;
 use crate::RED_STATUS_HEIGHT;
 
 use super::{
-    Syntax, SYNTAX_C, SYNTAX_HASKELL, SYNTAX_PYTHON, SYNTAX_RUST, SYNTAX_SHELL,
+    Syntax, SYNTAX_C, SYNTAX_HASKELL, SYNTAX_LISP, SYNTAX_PYTHON, SYNTAX_RUST,
+    SYNTAX_SHELL,
 };
 
 fn dummy_editor(syntax: &'static Syntax) -> Editor {
@@ -207,6 +208,35 @@ fn test_syntax_shell() {
         &mut editor,
         "bg if bind exec until eval let false true # fg getopts jobs",
         "bb_kk_bbbb_bbbb_kkkkk_bbbb_bbb_bbbbb_bbbb_ccccccccccccccccc",
+    );
+}
+
+#[test]
+fn test_syntax_lisp() {
+    let mut editor = dummy_editor(&SYNTAX_LISP);
+
+    expect_highlight_line(
+        &mut editor,
+        "(defun inc (x) (+ x 1))",
+        "_bbbbb__________b___0__",
+    );
+
+    expect_highlight_line(
+        &mut editor,
+        "(DEFUN INC (X) (+ X 1))",
+        "_bbbbb__________b___0__",
+    );
+
+    expect_highlight_line(
+        &mut editor,
+        r#"(concatenate 'string "hello" " " "world")"#,
+        r#"_bbbbbbbbbbb_________sssssss_sss_sssssss_"#,
+    );
+
+    expect_highlight_line(
+        &mut editor,
+        "(eval-when (:load-toplevel :compile-toplevel :execute) 100)",
+        "_bbbbbbbbb_____________________________________________000_",
     );
 }
 
