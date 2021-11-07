@@ -446,7 +446,12 @@ impl SyntaxState {
         idx: usize,
         symbol: &str,
     ) -> bool {
-        render[idx..].iter().zip(symbol.chars()).all(|(&r, s)| {
+        let rest_of_line = &render[idx..];
+        if rest_of_line.len() < symbol.len() {
+            return false;
+        }
+
+        rest_of_line.iter().zip(symbol.chars()).all(|(&r, s)| {
             if syntax.flags & HIGHLIGHT_CASE_INSENSITIVE != 0 {
                 r.to_lowercase().to_string() == s.to_lowercase().to_string()
             } else {
@@ -534,19 +539,19 @@ impl<'i, 'o> Editor<'i, 'o> {
                 .unwrap_or(&Highlight::Normal)
                 .clone();
 
-            if sstate.maybe_highlight_sl_comment(
-                &mut row.highlights[idx..],
-                &row.render[idx..],
-            ) {
-                break;
-            }
-
             if sstate.maybe_highlight_ml_comment(
                 &mut row.highlights[idx..],
                 &row.render[idx..],
                 &mut iter,
             ) {
                 continue;
+            }
+
+            if sstate.maybe_highlight_sl_comment(
+                &mut row.highlights[idx..],
+                &row.render[idx..],
+            ) {
+                break;
             }
 
             if sstate.maybe_highlight_chars(
