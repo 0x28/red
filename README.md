@@ -15,3 +15,11 @@ A simple terminal text editor based on [Build Your Own Text Editor](https://view
 | <kbd>Ctrl</kbd> + <kbd>C</kbd>     | copy          |
 | <kbd>Ctrl</kbd> + <kbd>V</kbd>     | paste         |
 | <kbd>Ctrl</kbd> + <kbd>Space</kbd> | select region |
+
+## Features
+
+- [x] syntax highlighting
+- [x] search
+- [x] copy/paste
+- [ ] undo/redo
+- [ ] ...
