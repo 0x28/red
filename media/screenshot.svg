@@ -1,0 +1,274 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" id="terminal" baseProfile="full" viewBox="0 0 744 767" width="744" version="1.1">
+  <defs>
+    <termtosvg:template_settings xmlns:termtosvg="https://github.com/nbedos/termtosvg">
+      <termtosvg:screen_geometry columns="93" rows="45"/>
+      <termtosvg:animation type="css"/>
+    </termtosvg:template_settings>
+    <style type="text/css" id="generated-style"><![CDATA[#screen {
+                font-family: 'DejaVu Sans Mono', monospace;
+                font-style: normal;
+                font-size: 14px;
+            }
+
+        text {
+            dominant-baseline: text-before-edge;
+            white-space: pre;
+        }
+    ]]></style>
+    <style type="text/css" id="user-style">
+            /* The colors defined below are the default 16 colors used for rendering text of the terminal. Adjust
+               them as needed.
+               dracula color theme */
+            .foreground {fill: #e9e9f4;}
+            .background {fill: #282936;}
+            .color0 {fill: #282936;}
+            .color1 {fill: #ea51b2;}
+            .color2 {fill: #ebff87;}
+            .color3 {fill: #00f769;}
+            .color4 {fill: #62d6e8;}
+            .color5 {fill: #b45bcf;}
+            .color6 {fill: #a1efe4;}
+            .color7 {fill: #e9e9f4;}
+            .color8 {fill: #626483;}
+            .color9 {fill: #b45bcf;}
+            .color10 {fill: #3a3c4e;}
+            .color11 {fill: #4d4f68;}
+            .color12 {fill: #62d6e8;}
+            .color13 {fill: #f1f2f8;}
+            .color14 {fill: #00f769;}
+            .color15 {fill: #f7f7fb;}
+        </style>
+  </defs>
+  <svg id="screen" width="744" height="765" viewBox="0 0 744 765" preserveAspectRatio="xMidYMin slice">
+    <rect class="background" height="100%" width="100%" x="0" y="0"/>
+    <defs>
+      <g id="g1">
+        <text x="0" textLength="176" class="foreground">1558&#x2502;                 </text>
+        <text x="176" textLength="40" class="color3">break</text>
+        <text x="216" textLength="528" class="foreground">;                                                                 </text>
+      </g>
+      <g id="g2">
+        <text x="0" textLength="744" class="foreground">1559&#x2502;             }                                                                          </text>
+      </g>
+      <g id="g3">
+        <text x="0" textLength="744" class="foreground">1560&#x2502;         }                                                                              </text>
+      </g>
+      <g id="g4">
+        <text x="0" textLength="744" class="foreground">1561&#x2502;                                                                                        </text>
+      </g>
+      <g id="g5">
+        <text x="0" textLength="744" class="foreground">1562&#x2502;         Ok(())                                                                         </text>
+      </g>
+      <g id="g6">
+        <text x="0" textLength="744" class="foreground">1563&#x2502;     }                                                                                  </text>
+      </g>
+      <g id="g7">
+        <text x="0" textLength="744" class="foreground">1564&#x2502; }                                                                                      </text>
+      </g>
+      <g id="g8">
+        <text x="0" textLength="744" class="foreground">1565&#x2502;                                                                                        </text>
+      </g>
+      <g id="g9">
+        <text x="0" textLength="48" class="foreground">1566&#x2502; </text>
+        <text x="48" textLength="16" class="color3">fn</text>
+        <text x="64" textLength="296" class="foreground"> enable_raw_mode() -&gt; Result&lt;(), Box&lt;</text>
+        <text x="360" textLength="24" class="color3">dyn</text>
+        <text x="384" textLength="360" class="foreground"> Error&gt;&gt; {                                   </text>
+      </g>
+      <g id="g10">
+        <text x="0" textLength="80" class="foreground">1567&#x2502;     </text>
+        <text x="80" textLength="24" class="color3">let</text>
+        <text x="104" textLength="8" class="foreground"> </text>
+        <text x="112" textLength="24" class="color3">mut</text>
+        <text x="136" textLength="608" class="foreground"> attr = Termios::from_fd(STDIN_FILENO)?;                                    </text>
+      </g>
+      <g id="g11">
+        <text x="0" textLength="744" class="foreground">1568&#x2502;     attr.c_iflag &amp;= !(BRKINT | ICRNL | INPCK | ISTRIP | IXON);                         </text>
+      </g>
+      <g id="g12">
+        <text x="0" textLength="744" class="foreground">1569&#x2502;     attr.c_oflag &amp;= !(OPOST);                                                          </text>
+      </g>
+      <g id="g13">
+        <text x="0" textLength="744" class="foreground">1570&#x2502;     attr.c_cflag |= CS8;                                                               </text>
+      </g>
+      <g id="g14">
+        <text x="0" textLength="744" class="foreground">1571&#x2502;     attr.c_lflag &amp;= !(ECHO | ICANON | IEXTEN | ISIG);                                  </text>
+      </g>
+      <g id="g15">
+        <text x="0" textLength="224" class="foreground">1572&#x2502;     attr.c_cc[VMIN] = </text>
+        <text x="224" textLength="8" class="color1">0</text>
+        <text x="232" textLength="512" class="foreground">;                                                               </text>
+      </g>
+      <g id="g16">
+        <text x="0" textLength="232" class="foreground">1573&#x2502;     attr.c_cc[VTIME] = </text>
+        <text x="232" textLength="8" class="color1">1</text>
+        <text x="240" textLength="504" class="foreground">;                                                              </text>
+      </g>
+      <g id="g17">
+        <text x="0" textLength="744" class="foreground">1574&#x2502;     termios::tcsetattr(STDIN_FILENO, TCSAFLUSH, &amp;attr)?;                               </text>
+      </g>
+      <g id="g18">
+        <text x="0" textLength="744" class="foreground">1575&#x2502;                                                                                        </text>
+      </g>
+      <g id="g19">
+        <text x="0" textLength="744" class="foreground">1576&#x2502;     Ok(())                                                                             </text>
+      </g>
+      <g id="g20">
+        <text x="0" textLength="744" class="foreground">1577&#x2502; }                                                                                      </text>
+      </g>
+      <g id="g21">
+        <text x="0" textLength="744" class="foreground">1578&#x2502;                                                                                        </text>
+      </g>
+      <g id="g22">
+        <text x="0" textLength="48" class="foreground">1579&#x2502; </text>
+        <text x="48" textLength="16" class="color3">fn</text>
+        <text x="64" textLength="680" class="foreground"> main() {                                                                            </text>
+      </g>
+      <g id="g23">
+        <text x="0" textLength="80" class="foreground">1580&#x2502;     </text>
+        <text x="80" textLength="24" class="color3">let</text>
+        <text x="104" textLength="8" class="foreground"> </text>
+        <text x="112" textLength="24" class="color3">mut</text>
+        <text x="136" textLength="608" class="foreground"> editor = Editor::new().unwrap();                                           </text>
+      </g>
+      <g id="g24">
+        <text x="0" textLength="80" class="foreground">1581&#x2502;     </text>
+        <text x="80" textLength="24" class="color3">let</text>
+        <text x="104" textLength="640" class="foreground"> args = env::args().collect::&lt;Vec&lt;_&gt;&gt;();                                        </text>
+      </g>
+      <g id="g25">
+        <text x="0" textLength="744" class="foreground">1582&#x2502;                                                                                        </text>
+      </g>
+      <g id="g26">
+        <text x="0" textLength="80" class="foreground">1583&#x2502;     </text>
+        <text x="80" textLength="16" class="color3">if</text>
+        <text x="96" textLength="8" class="foreground"> </text>
+        <text x="104" textLength="24" class="color3">let</text>
+        <text x="128" textLength="616" class="foreground"> [_prog, filename] = args.as_slice() {                                       </text>
+      </g>
+      <g id="g27">
+        <text x="0" textLength="440" class="foreground">1584&#x2502;         editor.open(Path::new(&amp;filename)).expect(</text>
+        <text x="440" textLength="112" class="color5">"open failed!"</text>
+        <text x="552" textLength="192" class="foreground">);                      </text>
+      </g>
+      <g id="g28">
+        <text x="0" textLength="744" class="foreground">1585&#x2502;     }                                                                                  </text>
+      </g>
+      <g id="g29">
+        <text x="0" textLength="32" class="background">1586</text>
+        <text x="32" textLength="16" class="foreground">&#x2502; </text>
+        <text x="48" textLength="8" class="background"> </text>
+        <text x="56" textLength="688" class="foreground">                                                                                      </text>
+      </g>
+      <g id="g30">
+        <text x="0" textLength="744" class="foreground">1587&#x2502;     set_status_message!(                                                               </text>
+      </g>
+      <g id="g31">
+        <text x="0" textLength="744" class="foreground">1588&#x2502;         &amp;mut editor,                                                                   </text>
+      </g>
+      <g id="g32">
+        <text x="0" textLength="112" class="foreground">1589&#x2502;         </text>
+        <text x="112" textLength="488" class="color5">"HELP: C-s = save | C-q = quit | C-f = find | C-SPC = select"</text>
+        <text x="600" textLength="144" class="foreground">                  </text>
+      </g>
+      <g id="g33">
+        <text x="0" textLength="744" class="foreground">1590&#x2502;     );                                                                                 </text>
+      </g>
+      <g id="g34">
+        <text x="0" textLength="744" class="foreground">1591&#x2502;                                                                                        </text>
+      </g>
+      <g id="g35">
+        <text x="0" textLength="80" class="foreground">1592&#x2502;     </text>
+        <text x="80" textLength="16" class="color3">if</text>
+        <text x="96" textLength="8" class="foreground"> </text>
+        <text x="104" textLength="24" class="color3">let</text>
+        <text x="128" textLength="616" class="foreground"> Err(e) = editor.run() {                                                     </text>
+      </g>
+      <g id="g36">
+        <text x="0" textLength="744" class="foreground">1593&#x2502;         clear_screen(&amp;mut io::stdout()).unwrap();                                      </text>
+      </g>
+      <g id="g37">
+        <text x="0" textLength="192" class="foreground">1594&#x2502;         eprintln!(</text>
+        <text x="192" textLength="88" class="color5">"error: {}"</text>
+        <text x="280" textLength="464" class="foreground">, e)                                                      </text>
+      </g>
+      <g id="g38">
+        <text x="0" textLength="744" class="foreground">1595&#x2502;     }                                                                                  </text>
+      </g>
+      <g id="g39">
+        <text x="0" textLength="744" class="foreground">1596&#x2502; }                                                                                      </text>
+      </g>
+      <g id="g40">
+        <text x="0" textLength="744" class="foreground">1597&#x2502;                                                                                        </text>
+      </g>
+      <g id="g41">
+        <text x="0" textLength="744" class="foreground">1598&#x2502; #[cfg(test)]                                                                           </text>
+      </g>
+      <g id="g42">
+        <text x="0" textLength="48" class="foreground">1599&#x2502; </text>
+        <text x="48" textLength="24" class="color3">mod</text>
+        <text x="72" textLength="672" class="foreground"> tests;                                                                             </text>
+      </g>
+      <g id="g43">
+        <text x="0" textLength="744" class="foreground">~                                                                                            </text>
+      </g>
+      <g id="g44">
+        <text x="0" textLength="744" class="background">src/main.rs - 1599 lines                                                     rust | 1586/1599</text>
+      </g>
+      <g id="g45">
+        <text x="0" textLength="744" class="foreground">                                                                                             </text>
+      </g>
+    </defs>
+    <g>
+      <use xlink:href="#g1" y="0"/>
+      <use xlink:href="#g2" y="17"/>
+      <use xlink:href="#g3" y="34"/>
+      <use xlink:href="#g4" y="51"/>
+      <use xlink:href="#g5" y="68"/>
+      <use xlink:href="#g6" y="85"/>
+      <use xlink:href="#g7" y="102"/>
+      <use xlink:href="#g8" y="119"/>
+      <use xlink:href="#g9" y="136"/>
+      <use xlink:href="#g10" y="153"/>
+      <use xlink:href="#g11" y="170"/>
+      <use xlink:href="#g12" y="187"/>
+      <use xlink:href="#g13" y="204"/>
+      <use xlink:href="#g14" y="221"/>
+      <use xlink:href="#g15" y="238"/>
+      <use xlink:href="#g16" y="255"/>
+      <use xlink:href="#g17" y="272"/>
+      <use xlink:href="#g18" y="289"/>
+      <use xlink:href="#g19" y="306"/>
+      <use xlink:href="#g20" y="323"/>
+      <use xlink:href="#g21" y="340"/>
+      <use xlink:href="#g22" y="357"/>
+      <use xlink:href="#g23" y="374"/>
+      <use xlink:href="#g24" y="391"/>
+      <use xlink:href="#g25" y="408"/>
+      <use xlink:href="#g26" y="425"/>
+      <use xlink:href="#g27" y="442"/>
+      <use xlink:href="#g28" y="459"/>
+      <rect x="0" y="476" width="32" height="17" class="foreground"/>
+      <rect x="48" y="476" width="8" height="17" class="foreground"/>
+      <use xlink:href="#g29" y="476"/>
+      <use xlink:href="#g30" y="493"/>
+      <use xlink:href="#g31" y="510"/>
+      <use xlink:href="#g32" y="527"/>
+      <use xlink:href="#g33" y="544"/>
+      <use xlink:href="#g34" y="561"/>
+      <use xlink:href="#g35" y="578"/>
+      <use xlink:href="#g36" y="595"/>
+      <use xlink:href="#g37" y="612"/>
+      <use xlink:href="#g38" y="629"/>
+      <use xlink:href="#g39" y="646"/>
+      <use xlink:href="#g40" y="663"/>
+      <use xlink:href="#g41" y="680"/>
+      <use xlink:href="#g42" y="697"/>
+      <use xlink:href="#g43" y="714"/>
+      <rect x="0" y="731" width="744" height="17" class="foreground"/>
+      <use xlink:href="#g44" y="731"/>
+      <use xlink:href="#g45" y="748"/>
+    </g>
+  </svg>
+</svg>
